@@ -1,6 +1,6 @@
-# MemoryLink - AI 기반 디지털 유품 정리 서비스 v3.4
+# MemoryLink - AI 기반 디지털 유품 정리 서비스 v3.4.2
 
-> ✅ **완전히 작동하는 프로덕션 준비 버전** - 로그인, 회원가입, 추억 추가/수정/삭제, 실시간 이미지 갤러리, AI 분석 통합, 향상된 FAB UI, **Python FastAPI 백엔드 추가**
+> ✅ **완전히 작동하는 프로덕션 준비 버전** - 로그인, 회원가입, 추억 추가/수정/삭제, 실시간 이미지 갤러리, AI 분석 통합, 향상된 FAB UI, **Python FastAPI 백엔드**, **VSCode 완벽 지원** ⭐
 
 ## 📋 프로젝트 개요
 
@@ -75,6 +75,21 @@
 
 ## 🚀 빠른 시작 가이드
 
+### ⚡ VSCode에서 바로 실행 (권장) ⭐
+
+```bash
+# 1. VSCode로 프로젝트 열기
+code /home/user/memorylink
+
+# 2. F5 누르기
+# 3. 실행 구성 선택: "🐍 Python: FastAPI (개발 서버)"
+# 4. 완료! http://localhost:8000 에서 API 실행 중
+```
+
+**📖 자세한 VSCode 가이드**: [`VSCODE_GUIDE.md`](./VSCODE_GUIDE.md) 참고
+
+---
+
 ### 1️⃣ 로컬 개발 환경 설정
 
 ```bash
@@ -82,8 +97,11 @@
 git clone https://github.com/kimayeong21/-1.git memorylink
 cd memorylink
 
-# 의존성 설치
+# Node.js 의존성 설치
 npm install
+
+# Python 의존성 설치 (NEW v3.4+)
+npm run python:install
 
 # 데이터베이스 마이그레이션
 npm run db:migrate:local
@@ -91,22 +109,42 @@ npm run db:migrate:local
 # 초기 데이터 시드 (카테고리 + 테스트 사용자)
 npm run db:seed
 npx wrangler d1 execute memorylink-production --local --file=./seed_auth.sql
-
-# 빌드
-npm run build
-
-# 개발 서버 시작 (PM2)
-pm2 start ecosystem.config.cjs
-
-# 또는 직접 실행
-npm run dev:sandbox
 ```
 
-### 2️⃣ 서비스 접속
+### 2️⃣ 서버 실행
 
+#### Option A: Python API만 실행
 ```bash
-# 로컬 주소
-http://localhost:3000
+# 방법 1: dev.py 사용 (권장)
+cd python-api
+python3 dev.py
+
+# 방법 2: NPM 스크립트
+npm run dev:python
+
+# 접속: http://localhost:8000
+# API 문서: http://localhost:8000/docs
+```
+
+#### Option B: Hono 서버만 실행
+```bash
+# 빌드 후 실행
+npm run build
+npm run dev:sandbox
+
+# 접속: http://localhost:3000
+```
+
+#### Option C: 풀스택 실행 (Python + Hono)
+```bash
+# 터미널 1: Python API
+cd python-api && python3 dev.py
+
+# 터미널 2: Hono Server
+npm run build && npm run dev:sandbox
+
+# Python API: http://localhost:8000
+# Hono Server: http://localhost:3000
 ```
 
 ### 3️⃣ 테스트 계정 로그인
@@ -369,6 +407,40 @@ npm run deploy:prod
 - 📄 FAB 데모 페이지 추가
 
 ## 📝 변경 이력
+
+### v3.4.2 (2026-03-17) ⭐ NEW
+- ✅ **VSCode 완벽 지원**: F5로 바로 실행 가능
+- ✅ **dev.py 추가**: 간편한 개발 서버 실행 스크립트
+- ✅ **launch.json 개선**: 4가지 디버깅 구성 + 풀스택 실행
+- ✅ **tasks.json 개선**: 포트 정리, 의존성 설치, 빌드/테스트 자동화
+- ✅ **VSCODE_GUIDE.md 추가**: 완전한 VSCode 사용 가이드
+- ✅ **실행 방법 다양화**: Python API 5가지 실행 방법 제공
+- ✅ **README 개편**: VSCode 빠른 시작 가이드 추가
+- 📚 기술 스택: Python 3.12.11, FastAPI 0.109.0, debugpy, Uvicorn
+- 🔧 디버깅: 브레이크포인트, Step Over/Into, 변수 검사
+- 🎨 VSCode 확장: Python, Pylance, Black Formatter, Thunder Client
+
+### v3.4.1 (2026-03-15)
+- ✅ Python API main.py 실행 수정
+- ✅ 4가지 실행 방법 추가 (direct, shell, PM2, NPM)
+- ✅ 시작 배너 및 URL 표시
+- ✅ 자동 새로고침 활성화
+- ✅ 로그 레벨 설정
+
+### v3.4 (2026-03-13)
+- ✅ Python FastAPI 백엔드 추가
+- ✅ AI 분석 API (감정, 키워드, 요약)
+- ✅ 고급 통계 API
+- ✅ 일괄 분석 기능
+- ✅ VSCode 통합 (.vscode 설정)
+
+### v3.3 (2026-03-12)
+- ✅ FAB UI 개선 (플로팅 액션 버튼 메뉴)
+- ✅ 빠른 추가 버튼 (사진/동영상/문서/SNS)
+- ✅ 애니메이션 효과 및 툴팁
+- ✅ 모바일 반응형 FAB
+- ✅ 카테고리 자동 선택
+- ✅ FAB 데모 페이지
 
 ### v3.2 (2026-03-10)
 - ✅ 추억 추가 기능 완전 작동 확인

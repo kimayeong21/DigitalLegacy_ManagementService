@@ -1,5 +1,15 @@
 {
+  "version": "2.0.0",
   "tasks": [
+    {
+      "label": "Clean Ports",
+      "type": "shell",
+      "command": "fuser -k 3000/tcp 2>/dev/null || true && fuser -k 8000/tcp 2>/dev/null || true",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
     {
       "label": "Install Python Dependencies",
       "type": "shell",
@@ -21,11 +31,67 @@
       }
     },
     {
-      "label": "Start Python API",
+      "label": "Start Python API (Dev)",
+      "type": "shell",
+      "command": "cd python-api && python3 dev.py",
+      "group": "test",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*Starting.*",
+          "endsPattern": ".*Application startup complete.*"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true
+      }
+    },
+    {
+      "label": "Start Python API (Main)",
+      "type": "shell",
+      "command": "cd python-api && python3 main.py",
+      "group": "test",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*Starting.*",
+          "endsPattern": ".*Application startup complete.*"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Start Python API (Uvicorn)",
       "type": "shell",
       "command": "cd python-api && python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000",
       "group": "test",
       "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*Started.*",
+          "endsPattern": ".*Uvicorn running.*"
+        }
+      },
       "presentation": {
         "reveal": "always",
         "panel": "new"
@@ -34,7 +100,7 @@
     {
       "label": "Start Hono Server",
       "type": "shell",
-      "command": "npm run dev:sandbox",
+      "command": "npm run build && npm run dev:sandbox",
       "group": "test",
       "isBackground": true,
       "presentation": {
@@ -46,22 +112,34 @@
       "label": "Build Project",
       "type": "shell",
       "command": "npm run build",
-      "group": "build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
       "presentation": {
         "reveal": "always",
         "panel": "shared"
       }
     },
     {
-      "label": "Run Tests",
+      "label": "Test Python API",
       "type": "shell",
-      "command": "pytest python-api/tests/",
+      "command": "curl -s http://localhost:8000/health | jq .",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Test Hono Server",
+      "type": "shell",
+      "command": "curl -s http://localhost:3000 | grep -o '<title>.*</title>'",
       "group": "test",
       "presentation": {
         "reveal": "always",
         "panel": "shared"
       }
     }
-  ],
-  "version": "2.0.0"
+  ]
 }

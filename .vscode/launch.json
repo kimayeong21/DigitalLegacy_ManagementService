@@ -2,49 +2,72 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: FastAPI",
-      "type": "python",
+      "name": "🐍 Python: FastAPI (개발 서버)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/python-api/dev.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/python-api",
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    {
+      "name": "🐍 Python: FastAPI (Main)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/python-api/main.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/python-api",
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    {
+      "name": "🐍 Python: FastAPI (Uvicorn)",
+      "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
       "args": [
-        "python-api.main:app",
+        "main:app",
         "--reload",
         "--host",
         "0.0.0.0",
         "--port",
         "8000"
       ],
+      "cwd": "${workspaceFolder}/python-api",
       "jinja": true,
-      "justMyCode": true,
+      "justMyCode": false,
+      "console": "integratedTerminal",
       "env": {
-        "PYTHONPATH": "${workspaceFolder}"
-      },
-      "console": "integratedTerminal"
+        "PYTHONPATH": "${workspaceFolder}/python-api",
+        "PYTHONUNBUFFERED": "1"
+      }
     },
     {
-      "name": "Node: Hono Dev Server",
+      "name": "🟢 Node: Hono Dev Server",
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:sandbox"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
-    },
-    {
-      "name": "Full Stack (Python + Node)",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:fullstack"],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal"
     }
   ],
   "compounds": [
     {
-      "name": "MemoryLink Full Stack",
-      "configurations": ["Python: FastAPI", "Node: Hono Dev Server"],
-      "stopAll": true
+      "name": "🚀 Full Stack (Python + Hono)",
+      "configurations": ["🐍 Python: FastAPI (개발 서버)", "🟢 Node: Hono Dev Server"],
+      "stopAll": true,
+      "preLaunchTask": "Clean Ports",
+      "presentation": {
+        "hidden": false,
+        "group": "fullstack",
+        "order": 1
+      }
     }
   ]
 }
