@@ -1,10 +1,10 @@
-# MemoryLink - AI 기반 디지털 유품 정리 서비스 v3.4.2
+# AI 기반 디지털 유품 정리 서비스 v3.4.3
 
 > ✅ **완전히 작동하는 프로덕션 준비 버전** - 로그인, 회원가입, 추억 추가/수정/삭제, 실시간 이미지 갤러리, AI 분석 통합, 향상된 FAB UI, **Python FastAPI 백엔드**, **VSCode 완벽 지원** ⭐
 
 ## 📋 프로젝트 개요
 
-**MemoryLink**는 사용자 인증과 AI 분석을 갖춘 완전한 디지털 추억 관리 서비스입니다. 회원가입 후 로그인하여 개인의 소중한 추억을 안전하게 보관하고, AI가 자동으로 분석해줍니다.
+**AI 기반 디지털 유품 정리 서비스**는 사용자 인증과 AI 분석을 갖춘 완전한 디지털 추억 관리 플랫폼입니다. 회원가입 후 로그인하여 개인의 소중한 추억을 안전하게 보관하고, AI가 자동으로 분석해줍니다.
 
 ## ✅ 현재 완료된 기능
 
@@ -408,7 +408,13 @@ npm run deploy:prod
 
 ## 📝 변경 이력
 
-### v3.4.2 (2026-03-17) ⭐ NEW
+### v3.4.3 (2026-03-17) ⭐ NEW
+- ✅ **브랜딩 개선**: MemoryLink 제거, "AI 기반 디지털 유품 정리 서비스"로 통일
+- ✅ **코드베이스 정리**: 모든 파일에서 MemoryLink 레퍼런스 제거
+- ✅ **문서 업데이트**: README, 테스트 가이드, Python API 문서 전면 개편
+- 🎨 간결하고 명확한 서비스 네이밍
+
+### v3.4.2 (2026-03-17)
 - ✅ **VSCode 완벽 지원**: F5로 바로 실행 가능
 - ✅ **dev.py 추가**: 간편한 개발 서버 실행 스크립트
 - ✅ **launch.json 개선**: 4가지 디버깅 구성 + 풀스택 실행
@@ -480,8 +486,8 @@ MIT License
 
 ## 👨‍💻 개발자
 
-- **프로젝트**: MemoryLink
-- **버전**: v3.2
+- **프로젝트**: AI 기반 디지털 유품 정리 서비스
+- **버전**: v3.4.3
 - **GitHub**: https://github.com/kimayeong21/-1
 - **테크**: Hono + Cloudflare Workers/Pages + D1 + R2 + OpenAI
 
@@ -501,7 +507,7 @@ MIT License
 
 프로젝트에 대한 질문이나 제안사항이 있으시면 GitHub Issues를 통해 연락해주세요!
 
-**MemoryLink** - 소중한 추억을 영원히 간직하세요 💜
+**AI 기반 디지털 유품 정리 서비스** - 소중한 추억을 영원히 간직하세요 💜
 tps://openai.com/) - AI 분석 API
 - [Tailwind CSS](https://tailwindcss.com/) - 유틸리티 CSS 프레임워크
 
@@ -511,7 +517,7 @@ tps://openai.com/) - AI 분석 API
 
 프로젝트에 대한 질문이나 제안사항이 있으시면 GitHub Issues를 통해 연락해주세요!
 
-**MemoryLink** - 소중한 추억을 영원히 간직하세요 💜
+**AI 기반 디지털 유품 정리 서비스** - 소중한 추억을 영원히 간직하세요 💜
 
 ## 🐍 Python FastAPI 백엔드 (NEW v3.4)
 
@@ -562,7 +568,7 @@ npm run test:python
    - `F5` 또는 Run > Start Debugging
    - "Python: FastAPI" 선택 → Python API 디버깅
    - "Node: Hono Dev Server" 선택 → Hono 서버 디버깅
-   - "MemoryLink Full Stack" 선택 → 동시 실행
+   - "🚀 Full Stack (Python + Hono)" 선택 → 동시 실행
 
 3. **터미널 작업**
    - `Ctrl+Shift+B` → Build Task 실행

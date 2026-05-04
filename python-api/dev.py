@@ -17,7 +17,7 @@ if __name__ == "__main__":
     import uvicorn
     
     print("="*60)
-    print("🚀 MemoryLink Python API Development Server")
+    print("🚀 AI 유품 정리 서비스 API - 개발 서버")
     print("="*60)
     print(f"📍 Host: http://0.0.0.0:8000")
     print(f"📍 Local: http://localhost:8000")

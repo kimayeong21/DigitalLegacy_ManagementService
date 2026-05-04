@@ -1,4 +1,4 @@
-# VSCode에서 MemoryLink 실행하기
+# VSCode에서 AI 기반 디지털 유품 정리 서비스 실행하기
 
 ## 🎯 빠른 시작 (3단계)
 

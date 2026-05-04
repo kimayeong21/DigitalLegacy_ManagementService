@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MemoryLink Python API 실행 스크립트
+AI 기반 디지털 유품 정리 서비스 - Python API 실행 스크립트
 """
 
 import sys

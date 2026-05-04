@@ -739,7 +739,7 @@ app.get('/', (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>MemoryLink - AI 기반 디지털 유품 정리 서비스</title>
+        <title>AI 기반 디지털 유품 정리 서비스</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
@@ -943,8 +943,8 @@ app.get('/', (c) => {
             <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
                 <div class="text-center mb-8">
                     <i class="fas fa-heart text-5xl text-purple-600 mb-4"></i>
-                    <h1 class="text-3xl font-bold text-gray-900">MemoryLink</h1>
-                    <p class="text-gray-600 mt-2">AI 기반 디지털 유품 정리 서비스</p>
+                    <h1 class="text-3xl font-bold text-gray-900">AI 유품 정리</h1>
+                    <p class="text-gray-600 mt-2">소중한 추억을 영원히 간직하세요</p>
                 </div>
 
                 <!-- Login Form -->
@@ -1015,8 +1015,8 @@ app.get('/', (c) => {
                         <div class="flex items-center space-x-3">
                             <i class="fas fa-heart text-3xl text-purple-600"></i>
                             <div>
-                                <h1 class="text-2xl font-bold text-gray-900">MemoryLink</h1>
-                                <p class="text-xs text-gray-500">AI 기반 디지털 유품 관리</p>
+                                <h1 class="text-2xl font-bold text-gray-900">AI 유품 정리</h1>
+                                <p class="text-xs text-gray-500">소중한 추억 보관 서비스</p>
                             </div>
                         </div>
                         <div class="flex items-center space-x-4">

@@ -1,10 +1,10 @@
-# MemoryLink Python API
+# AI 기반 디지털 유품 정리 서비스 - Python API
 
 FastAPI 기반의 고급 AI 분석 및 데이터 처리 백엔드
 
 ## 📋 개요
 
-MemoryLink의 Python 백엔드는 Hono/TypeScript 프론트엔드와 함께 작동하여 고급 AI 분석, 데이터 처리, 통계 분석 기능을 제공합니다.
+Python 백엔드는 Hono/TypeScript 프론트엔드와 함께 작동하여 고급 AI 분석, 데이터 처리, 통계 분석 기능을 제공합니다.
 
 ## ✨ 주요 기능
 

@@ -1,5 +1,5 @@
 """
-MemoryLink Python API
+AI 기반 디지털 유품 정리 서비스 - Python API
 FastAPI backend for advanced AI analysis and data processing
 """
 
@@ -14,7 +14,7 @@ from datetime import datetime
 import json
 
 app = FastAPI(
-    title="MemoryLink Python API",
+    title="AI 기반 디지털 유품 정리 서비스 API",
     description="Advanced AI analysis and data processing backend",
     version="1.0.0"
 )
@@ -68,7 +68,7 @@ async def get_db():
 async def root():
     """API 루트"""
     return {
-        "message": "MemoryLink Python API",
+        "message": "AI 기반 디지털 유품 정리 서비스 API",
         "version": "1.0.0",
         "endpoints": {
             "health": "/health",
@@ -276,7 +276,7 @@ async def batch_analyze_memories(
 if __name__ == "__main__":
     import uvicorn
     print("="*60)
-    print("🚀 MemoryLink Python API Server Starting...")
+    print("🚀 AI 기반 디지털 유품 정리 서비스 API 시작...")
     print("="*60)
     print(f"📍 Host: http://0.0.0.0:8000")
     print(f"📍 Local: http://localhost:8000")
