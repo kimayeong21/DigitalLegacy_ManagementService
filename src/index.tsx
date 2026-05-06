@@ -1192,6 +1192,7 @@ app.get('/', (c) => {
                                     <div id="upload-area" class="upload-area p-8 rounded-lg text-center cursor-pointer">
                                         <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
                                         <p class="text-sm text-gray-600">클릭하거나 파일을 드래그하세요</p>
+                                        <p class="text-xs text-gray-400 mt-1">스크린샷을 복사 후 Ctrl+V로 붙여넣기 가능</p>
                                         <p class="text-xs text-gray-400 mt-1">또는 아래에 URL을 직접 입력하세요</p>
                                         <input type="file" id="file-input" class="hidden" accept="image/*,video/*">
                                     </div>
@@ -1405,6 +1406,35 @@ app.get('/', (c) => {
                         handleFileSelect({ target: fileInput });
                     }
                 });
+                
+                // 스크린샷 붙여넣기 지원
+                document.addEventListener('paste', handlePaste);
+            }
+            
+            async function handlePaste(e) {
+                // 모달이 열려있을 때만 작동
+                const modal = document.getElementById('memory-modal');
+                if (modal.classList.contains('hidden')) return;
+                
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                        e.preventDefault();
+                        const file = items[i].getAsFile();
+                        if (file) {
+                            // File input에 파일 설정
+                            const dataTransfer = new DataTransfer();
+                            dataTransfer.items.add(file);
+                            document.getElementById('file-input').files = dataTransfer.files;
+                            
+                            // 파일 처리
+                            await handleFileSelect({ target: { files: [file] } });
+                        }
+                        break;
+                    }
+                }
             }
 
             async function handleFileSelect(e) {
@@ -1412,25 +1442,65 @@ app.get('/', (c) => {
                 if (!file) return;
                 
                 const preview = document.getElementById('file-preview');
-                preview.innerHTML = \`
-                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div class="flex items-center space-x-2">
-                            <i class="fas fa-file text-purple-600"></i>
-                            <span class="text-sm text-gray-700">\${file.name}</span>
+                const maxSize = 10 * 1024 * 1024; // 10MB
+                
+                if (file.size > maxSize) {
+                    preview.innerHTML = \`
+                        <div class="p-3 bg-red-50 rounded-lg border border-red-200">
+                            <p class="text-sm text-red-800">
+                                <i class="fas fa-exclamation-circle"></i>
+                                파일 크기가 너무 큽니다 (최대 10MB)
+                            </p>
                         </div>
-                        <span class="text-xs text-gray-500">\${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                    \`;
+                    return;
+                }
+                
+                preview.innerHTML = \`
+                    <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-spinner fa-spin text-blue-600"></i>
+                            <span class="text-sm text-blue-700">\${file.name} 처리 중...</span>
+                        </div>
+                        <span class="text-xs text-blue-500">\${(file.size / 1024 / 1024).toFixed(2)} MB</span>
                     </div>
-                    <p class="text-xs text-gray-500 mt-2">
-                        <i class="fas fa-info-circle"></i>
-                        R2 버킷 미설정 시 URL을 직접 입력해주세요
-                    </p>
                 \`;
                 
+                // 이미지를 Base64로 변환하여 직접 저장
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        uploadedFileUrl = e.target.result; // Base64 data URL
+                        document.getElementById('file-url').value = uploadedFileUrl;
+                        
+                        preview.innerHTML = \`
+                            <div class="p-3 bg-green-50 rounded-lg border border-green-200">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <i class="fas fa-check-circle text-green-600"></i>
+                                    <span class="text-sm text-green-700">이미지 준비 완료!</span>
+                                </div>
+                                <img src="\${e.target.result}" class="rounded-lg max-h-48 object-cover w-full">
+                            </div>
+                        \`;
+                    };
+                    reader.onerror = () => {
+                        preview.innerHTML = \`
+                            <div class="p-3 bg-red-50 rounded-lg border border-red-200">
+                                <p class="text-sm text-red-800">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    파일 읽기 실패
+                                </p>
+                            </div>
+                        \`;
+                    };
+                    reader.readAsDataURL(file);
+                    return;
+                }
+                
+                // R2 업로드 시도 (동영상 등)
                 try {
                     const formData = new FormData();
                     formData.append('file', file);
-                    
-                    preview.innerHTML += '<p class="text-xs text-blue-600 mt-2"><i class="fas fa-spinner fa-spin"></i> 업로드 중...</p>';
                     
                     const response = await axios.post(\`\${API_BASE}/upload\`, formData, {
                         headers: { 'Content-Type': 'multipart/form-data' }
@@ -1447,24 +1517,16 @@ app.get('/', (c) => {
                             </div>
                         </div>
                     \`;
-                    
-                    if (file.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            preview.innerHTML += \`<img src="\${e.target.result}" class="mt-2 rounded-lg max-h-48 object-cover">\`;
-                        };
-                        reader.readAsDataURL(file);
-                    }
                 } catch (error) {
-                    console.log('업로드 실패 (R2 미설정):', error.response?.data?.error);
+                    console.log('R2 업로드 실패:', error.response?.data?.error);
                     preview.innerHTML = \`
                         <div class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                             <p class="text-sm text-yellow-800">
                                 <i class="fas fa-exclamation-triangle"></i>
-                                자동 업로드 불가 (R2 미설정)
+                                R2 업로드 불가 (버킷 미설정)
                             </p>
                             <p class="text-xs text-yellow-700 mt-1">
-                                아래 URL 입력란에 외부 이미지 URL을 입력하세요
+                                아래 URL 입력란에 외부 URL을 입력하세요
                             </p>
                         </div>
                     \`;
