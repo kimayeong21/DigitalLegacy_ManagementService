@@ -1,6 +1,6 @@
-# AI 기반 디지털 유품 정리 서비스 v3.4.4
+# AI 기반 디지털 유품 정리 서비스 v3.5.0
 
-> ✅ **완전히 작동하는 프로덕션 준비 버전** - 로그인, 회원가입, 추억 추가/수정/삭제, **스크린샷 붙여넣기**, 실시간 이미지 갤러리, AI 분석 통합, 향상된 FAB UI, **Python FastAPI 백엔드**, **VSCode 완벽 지원** ⭐
+> ✅ **완전히 작동하는 프로덕션 준비 버전** - 로그인, 회원가입, 추억 추가/수정/삭제, **스크린샷 붙여넣기**, 실시간 이미지 갤러리, AI 분석 통합, 향상된 FAB UI, **Python FastAPI 백엔드**, **VSCode 완벽 지원**, **SQL 최적화 및 확장 기능** ⭐
 
 ## 📋 프로젝트 개요
 
@@ -71,8 +71,20 @@
 ### 💾 데이터 관리
 - ✅ **JSON 내보내기**: 모든 추억 백업
 - ✅ **데이터베이스**: Cloudflare D1 (SQLite)
-- ✅ **마이그레이션**: 구조화된 DB 마이그레이션
+- ✅ **마이그레이션**: 구조화된 DB 마이그레이션 (4단계)
 - ✅ **시드 데이터**: 테스트용 샘플 데이터
+- ✅ **SQL 최적화** (NEW v3.5.0):
+  - 📊 **성능 인덱스**: 15+ 최적화된 인덱스
+  - ⚡ **자동 트리거**: updated_at 자동 업데이트
+  - 🔍 **뷰 (Views)**: 복잡한 쿼리 간소화
+  - 📈 **통계 뷰**: user_statistics, monthly_memory_stats
+  - 🔗 **조인 뷰**: memories_with_categories
+- ✅ **확장 테이블** (NEW v3.5.0):
+  - 📝 **activity_logs**: 사용자 활동 추적
+  - 🔗 **shared_memories**: 추억 공유 기능
+  - ⭐ **favorites**: 즐겨찾기/북마크
+  - 💬 **memory_comments**: 댓글 시스템
+  - 🔔 **notification_settings**: 알림 설정
 
 ---
 
@@ -219,53 +231,31 @@ https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800
 
 ## 🗄️ 데이터베이스 구조
 
-### users 테이블
-```sql
-id INTEGER PRIMARY KEY
-email TEXT UNIQUE NOT NULL
-password TEXT NOT NULL (SHA-256 해시)
-name TEXT NOT NULL
-avatar_url TEXT
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-```
+### 핵심 테이블
 
-### sessions 테이블
-```sql
-id TEXT PRIMARY KEY (UUID)
-user_id INTEGER
-expires_at DATETIME
-created_at DATETIME
-```
+1. **users** - 사용자 계정
+2. **sessions** - 인증 세션
+3. **memories** - 디지털 추억/유품
+4. **categories** - 카테고리 분류
+5. **connections** - 추억 간 연결
 
-### memories 테이블
-```sql
-id INTEGER PRIMARY KEY
-user_id INTEGER (FK)
-category_id INTEGER (FK)
-title TEXT NOT NULL
-description TEXT
-content TEXT
-file_url TEXT
-file_type TEXT
-tags TEXT (JSON)
-ai_summary TEXT
-ai_sentiment TEXT
-ai_keywords TEXT (JSON)
-importance_score INTEGER (1-10)
-is_archived INTEGER
-original_date DATETIME
-created_at DATETIME
-updated_at DATETIME
-```
+### 확장 테이블 (v3.5.0)
 
-### categories 테이블
-```sql
-id INTEGER PRIMARY KEY
-name TEXT NOT NULL
-icon TEXT
-color TEXT
-created_at DATETIME
-```
+6. **activity_logs** - 사용자 활동 로그
+7. **shared_memories** - 공유 기능
+8. **favorites** - 즐겨찾기
+9. **memory_comments** - 댓글
+10. **notification_settings** - 알림 설정
+
+### 데이터베이스 뷰
+
+- **memories_with_categories** - 추억 + 카테고리 조인
+- **user_statistics** - 사용자별 통계
+- **monthly_memory_stats** - 월별 통계
+
+**📖 전체 스키마 문서**: [`db/schema.md`](./db/schema.md) 참고  
+**📝 쿼리 예제**: [`db/queries.sql`](./db/queries.sql) 참고  
+**🔧 데이터베이스 가이드**: [`db/README.md`](./db/README.md) 참고
 
 ---
 
@@ -411,7 +401,31 @@ npm run deploy:prod
 
 ## 📝 변경 이력
 
-### v3.4.4 (2026-03-17) ⭐ NEW
+### v3.5.0 (2026-05-07) ⭐ NEW
+- 🗄️ **SQL 기반 마이그레이션 시스템**: 4단계 구조화된 DB 마이그레이션
+- ⚡ **쿼리 성능 최적화**: 15+ 최적화된 인덱스 추가
+- 🔍 **복합 인덱스**: user_id와 category_id, created_at, importance_score 조합 인덱스
+- 📊 **데이터베이스 뷰 3개**: 
+  - `memories_with_categories`: 카테고리 정보 포함 추억 조회
+  - `user_statistics`: 사용자별 통계 (총 추억, 감정 분포, 평균 중요도)
+  - `monthly_memory_stats`: 월별 추억 통계
+- ⏰ **자동 트리거**: memories와 users 테이블 updated_at 자동 업데이트
+- 📝 **활동 로그 시스템**: activity_logs 테이블로 사용자 행동 추적
+- 🔗 **추억 공유 기능**: shared_memories 테이블 (UUID 기반 공유 링크)
+- ⭐ **즐겨찾기 시스템**: favorites 테이블로 북마크 관리
+- 💬 **댓글 시스템**: memory_comments 테이블 (대댓글 지원)
+- 🔔 **알림 설정**: notification_settings 테이블
+- 📚 **데이터베이스 문서화**:
+  - `db/schema.md`: 전체 스키마 문서 (ERD 포함)
+  - `db/queries.sql`: 자주 사용하는 SQL 쿼리 모음
+  - `db/README.md`: 데이터베이스 관리 가이드
+- 🚀 **마이그레이션 파일**:
+  - `0001_initial_schema.sql`: 초기 스키마
+  - `0002_add_auth.sql`: 인증 시스템
+  - `0003_optimize_queries.sql`: 쿼리 최적화 (NEW)
+  - `0004_add_analytics.sql`: 분석 및 확장 기능 (NEW)
+
+### v3.4.4 (2026-03-17)
 - 🐛 **버그 수정**: 추억 추가 기능 정상 작동
 - 📋 **스크린샷 붙여넣기**: Ctrl+V로 클립보드 이미지 직접 업로드
 - 🖼️ **이미지 업로드 개선**: Base64 인코딩으로 데이터베이스에 직접 저장
