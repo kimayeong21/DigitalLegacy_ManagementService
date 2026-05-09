@@ -8,7 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
-import aiosqlite
+import aiomysql
+import asyncio
+import urllib.request
 import os
 from datetime import datetime
 import json
@@ -28,8 +30,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 데이터베이스 경로
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", ".wrangler", "state", "v3", "d1", "miniflare-D1DatabaseObject", "memorylink-production.sqlite")
+# MySQL database connection settings
+MYSQL_CONFIG = {
+    "host": os.getenv("MYSQL_HOST", "127.0.0.1"),
+    "port": int(os.getenv("MYSQL_PORT", "3306")),
+    "user": os.getenv("MYSQL_USER", "root"),
+    "password": os.getenv("MYSQL_PASSWORD", ""),
+    "db": os.getenv("MYSQL_DATABASE", "memorylink"),
+    "charset": "utf8mb4",
+    "autocommit": True,
+}
+
+def normalize_mysql_query(query: str) -> str:
+    return (
+        query
+        .replace("strftime('%Y-%m', created_at)", "DATE_FORMAT(created_at, '%Y-%m')")
+        .replace("?", "%s")
+    )
+
+class MySQLDatabaseAdapter:
+    def __init__(self, connection):
+        self.connection = connection
+
+    async def execute(self, query: str, params=None):
+        cursor = await self.connection.cursor()
+        await cursor.execute(normalize_mysql_query(query), params or ())
+        return cursor
+
+async def open_mysql_connection():
+    return await aiomysql.connect(
+        **MYSQL_CONFIG,
+        cursorclass=aiomysql.DictCursor,
+    )
 
 # Pydantic Models
 class Memory(BaseModel):
@@ -50,19 +82,22 @@ class AIAnalysisResponse(BaseModel):
     summary: Optional[str] = None
     sentiment: Optional[str] = None
     keywords: Optional[List[str]] = None
+    confidence: float = 0.0
+    recommended_tags: List[str] = []
+    memory_meaning: Optional[str] = None
 
 # Database Helper
 async def get_db():
-    """데이터베이스 연결"""
-    if not os.path.exists(DB_PATH):
-        raise HTTPException(status_code=500, detail="Database not found")
-    
-    db = await aiosqlite.connect(DB_PATH)
-    db.row_factory = aiosqlite.Row
+    """MySQL database connection"""
     try:
-        yield db
+        connection = await open_mysql_connection()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"MySQL connection failed: {exc}")
+
+    try:
+        yield MySQLDatabaseAdapter(connection)
     finally:
-        await db.close()
+        connection.close()
 
 @app.get("/")
 async def root():
@@ -80,60 +115,180 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """헬스 체크"""
+    """Health check"""
+    database_status = "connected"
+    try:
+        connection = await open_mysql_connection()
+        connection.close()
+    except Exception:
+        database_status = "not_connected"
+
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "python_version": "3.12.11",
-        "database": "connected" if os.path.exists(DB_PATH) else "not_found"
+        "database": database_status,
+        "database_type": "mysql",
+        "database_host": MYSQL_CONFIG["host"],
     }
+
+def unique_list(values, limit=7):
+    result = []
+    seen = set()
+    for raw in values:
+        value = str(raw).strip(" .,!?()[]{}\"'")
+        if len(value) < 2 or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+        if len(result) >= limit:
+            break
+    return result
+
+def local_ai_analysis(text: str):
+    clean_text = " ".join(text.split())
+    lower_text = clean_text.lower()
+    positive_words = ["행복", "기쁨", "사랑", "즐거", "감사", "소중", "웃음", "좋", "최고", "따뜻"]
+    negative_words = ["슬픔", "아픔", "힘들", "그립", "외로", "걱정", "후회", "눈물", "상실", "미안"]
+    positive_score = sum(1 for word in positive_words if word in lower_text)
+    negative_score = sum(1 for word in negative_words if word in lower_text)
+
+    sentiment = "neutral"
+    if positive_score > negative_score:
+        sentiment = "positive"
+    elif negative_score > positive_score:
+        sentiment = "negative"
+
+    raw_words = clean_text.replace(".", " ").replace(",", " ").split()
+    keywords = unique_list(raw_words, 7)
+    if len(keywords) < 3:
+        keywords = unique_list(keywords + ["추억", "기록", "보관"], 7)
+
+    first_sentence = clean_text.split(".")[0] if clean_text else ""
+    summary = first_sentence[:90] + "..." if len(first_sentence) > 90 else first_sentence
+    if not summary:
+        summary = "추억의 내용을 분석했습니다."
+
+    recommended_tags = unique_list(keywords[:4] + ["소중한 순간" if sentiment == "positive" else "기억 정리"], 5)
+
+    return {
+        "summary": summary,
+        "sentiment": sentiment,
+        "keywords": keywords,
+        "confidence": 0.55,
+        "recommended_tags": recommended_tags,
+        "memory_meaning": "이 기록은 개인의 경험과 감정을 다시 떠올릴 수 있게 해 주는 추억 자료입니다."
+    }
+
+def normalize_ai_analysis(value, original_text: str):
+    fallback = local_ai_analysis(original_text)
+    sentiment = value.get("sentiment") if isinstance(value, dict) else None
+    if sentiment not in ["positive", "negative", "neutral"]:
+        sentiment = fallback["sentiment"]
+
+    keywords = unique_list(value.get("keywords", []) if isinstance(value, dict) else [], 7)
+    recommended_tags = unique_list(value.get("recommended_tags", []) if isinstance(value, dict) else [], 5)
+
+    try:
+        confidence = float(value.get("confidence", fallback["confidence"])) if isinstance(value, dict) else fallback["confidence"]
+    except Exception:
+        confidence = fallback["confidence"]
+
+    return {
+        "summary": str(value.get("summary") if isinstance(value, dict) else fallback["summary"])[:180] or fallback["summary"],
+        "sentiment": sentiment,
+        "keywords": keywords or fallback["keywords"],
+        "confidence": min(1.0, max(0.0, confidence)),
+        "recommended_tags": recommended_tags or fallback["recommended_tags"],
+        "memory_meaning": str(value.get("memory_meaning") if isinstance(value, dict) else fallback["memory_meaning"])[:180] or fallback["memory_meaning"]
+    }
+
+async def openai_ai_analysis(text: str):
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["summary", "sentiment", "keywords", "confidence", "recommended_tags", "memory_meaning"],
+        "properties": {
+            "summary": {"type": "string"},
+            "sentiment": {"type": "string", "enum": ["positive", "negative", "neutral"]},
+            "keywords": {"type": "array", "minItems": 3, "maxItems": 7, "items": {"type": "string"}},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "recommended_tags": {"type": "array", "minItems": 2, "maxItems": 5, "items": {"type": "string"}},
+            "memory_meaning": {"type": "string"}
+        }
+    }
+    payload = {
+        "model": os.getenv("OPENAI_MODEL", "gpt-5.2"),
+        "instructions": "\n".join([
+            "당신은 AI 기반 추억 관리 서비스의 분석 엔진입니다.",
+            "입력된 추억 기록을 한국어로 요약하고 감정, 키워드, 추천 태그를 분석합니다.",
+            "입력에 없는 가족 관계나 사건은 단정하지 않습니다."
+        ]),
+        "input": f"다음 추억 기록을 분석해 주세요.\n\n{text}",
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "memory_analysis",
+                "strict": True,
+                "schema": schema
+            }
+        },
+        "max_output_tokens": 700
+    }
+
+    def request_openai():
+        request = urllib.request.Request(
+            "https://api.openai.com/v1/responses",
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            output_text = data.get("output_text", "")
+            if not output_text:
+                parts = []
+                for item in data.get("output", []):
+                    for content in item.get("content", []):
+                        if isinstance(content.get("text"), str):
+                            parts.append(content["text"])
+                output_text = "\n".join(parts)
+            return json.loads(output_text)
+
+    return await asyncio.to_thread(request_openai)
 
 @app.post("/api/ai/analyze", response_model=AIAnalysisResponse)
 async def ai_analyze(request: AIAnalysisRequest):
-    """
-    AI 분석 엔드포인트 (Python으로 구현)
-    - 감정 분석
-    - 키워드 추출
-    - 요약 생성
-    """
     try:
-        result = {
-            "summary": None,
-            "sentiment": None,
-            "keywords": None
-        }
-        
-        # 간단한 감정 분석 (기본 구현)
-        if request.analyze_sentiment:
-            text_lower = request.text.lower()
-            positive_words = ['좋', '행복', '기쁨', '사랑', '즐거', '멋진', '훌륭', '최고']
-            negative_words = ['슬프', '나쁘', '힘들', '아프', '싫', '우울', '끔찍']
-            
-            positive_count = sum(1 for word in positive_words if word in text_lower)
-            negative_count = sum(1 for word in negative_words if word in text_lower)
-            
-            if positive_count > negative_count:
-                result['sentiment'] = 'positive'
-            elif negative_count > positive_count:
-                result['sentiment'] = 'negative'
-            else:
-                result['sentiment'] = 'neutral'
-        
-        # 키워드 추출 (간단한 구현)
-        if request.extract_keywords:
-            words = request.text.split()
-            # 3글자 이상인 단어만 추출
-            keywords = [word for word in words if len(word) >= 3][:5]
-            result['keywords'] = keywords
-        
-        # 요약 생성
-        if request.generate_summary:
-            # 첫 100자 또는 첫 문장
-            summary = request.text[:100] + "..." if len(request.text) > 100 else request.text
-            result['summary'] = summary
-        
+        if not request.text.strip():
+            raise HTTPException(status_code=400, detail="text is required")
+
+        openai_result = None
+        try:
+            openai_result = await openai_ai_analysis(request.text)
+        except Exception as exc:
+            print(f"OpenAI analysis fallback: {exc}")
+
+        result = normalize_ai_analysis(openai_result or local_ai_analysis(request.text), request.text)
+
+        if not request.analyze_sentiment:
+            result["sentiment"] = None
+        if not request.extract_keywords:
+            result["keywords"] = []
+            result["recommended_tags"] = []
+        if not request.generate_summary:
+            result["summary"] = None
+
         return result
-        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
 
@@ -141,7 +296,7 @@ async def ai_analyze(request: AIAnalysisRequest):
 async def get_memories(
     skip: int = 0, 
     limit: int = 20,
-    db: aiosqlite.Connection = Depends(get_db)
+    db: MySQLDatabaseAdapter = Depends(get_db)
 ):
     """추억 목록 조회 (Python)"""
     try:
@@ -189,7 +344,7 @@ async def get_memories(
         raise HTTPException(status_code=500, detail=f"Failed to fetch memories: {str(e)}")
 
 @app.get("/api/stats/advanced")
-async def get_advanced_stats(db: aiosqlite.Connection = Depends(get_db)):
+async def get_advanced_stats(db: MySQLDatabaseAdapter = Depends(get_db)):
     """고급 통계 분석 (Python)"""
     try:
         stats = {}
@@ -244,7 +399,7 @@ async def get_advanced_stats(db: aiosqlite.Connection = Depends(get_db)):
 @app.post("/api/memories/batch-analyze")
 async def batch_analyze_memories(
     memory_ids: List[int],
-    db: aiosqlite.Connection = Depends(get_db)
+    db: MySQLDatabaseAdapter = Depends(get_db)
 ):
     """여러 추억을 일괄 분석"""
     try:

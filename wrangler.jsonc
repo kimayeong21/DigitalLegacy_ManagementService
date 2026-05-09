@@ -6,13 +6,13 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "memorylink-production",
-      "database_id": "local-dev-db"
-    }
-  ],
+  "vars": {
+    "MYSQL_HOST": "127.0.0.1",
+    "MYSQL_PORT": "3306",
+    "MYSQL_USER": "root",
+    "MYSQL_DATABASE": "memorylink",
+    "OPENAI_MODEL": "gpt-5.2"
+  },
   "r2_buckets": [
     {
       "binding": "BUCKET",

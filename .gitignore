@@ -52,5 +52,4 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Database
-*.sqlite
 *.db
