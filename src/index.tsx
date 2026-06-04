@@ -164,6 +164,7 @@ type MemoryAnalysis = {
   atmosphere: string;
   felt_emotion: string;
   image_observations: string;
+  event_story: string;
 }
 
 type MemoryAnalysisContext = {
@@ -184,7 +185,8 @@ const memoryAnalysisSchema = {
     'scene_type',
     'atmosphere',
     'felt_emotion',
-    'image_observations'
+    'image_observations',
+    'event_story'
   ],
   properties: {
     summary: {
@@ -235,6 +237,10 @@ const memoryAnalysisSchema = {
     image_observations: {
       type: 'string',
       description: '이미지가 있으면 보이는 요소를 근거 중심으로 설명하고, 이미지가 없으면 설명문 기준으로 추정'
+    },
+    event_story: {
+      type: 'string',
+      description: '이미지와 설명을 종합해 그때 어떤 일이 있었는지 추정하되, 확실하지 않은 내용은 추정이라고 표현'
     }
   }
 }
@@ -295,7 +301,10 @@ function createLocalMemoryAnalysis(text: string, context: MemoryAnalysisContext 
     felt_emotion: feltEmotion,
     image_observations: hasImage
       ? '이미지와 사용자가 입력한 설명을 함께 기준으로 장면과 분위기를 추정했습니다.'
-      : '이미지는 없지만 제목과 설명문을 기준으로 장면과 감정을 추정했습니다.'
+      : '이미지는 없지만 제목과 설명문을 기준으로 장면과 감정을 추정했습니다.',
+    event_story: hasImage
+      ? '이미지와 설명을 함께 보면 특정 순간을 남기고 그 분위기를 기억하기 위해 저장한 기록으로 판단됩니다.'
+      : '제목과 설명문을 바탕으로 사용자가 그날의 상황과 느낀 감정을 다시 확인하기 위해 정리한 기록으로 판단됩니다.'
   }
 }
 
@@ -324,7 +333,8 @@ function normalizeAnalysis(value: any, originalText: string, context: MemoryAnal
     scene_type: String(value?.scene_type || fallback.scene_type).slice(0, 120),
     atmosphere: String(value?.atmosphere || fallback.atmosphere).slice(0, 120),
     felt_emotion: String(value?.felt_emotion || fallback.felt_emotion).slice(0, 120),
-    image_observations: String(value?.image_observations || fallback.image_observations).slice(0, 220)
+    image_observations: String(value?.image_observations || fallback.image_observations).slice(0, 220),
+    event_story: String(value?.event_story || fallback.event_story).slice(0, 260)
   }
 }
 
@@ -368,6 +378,7 @@ async function analyzeWithAI(
         text: [
           '다음 추억 기록을 분석해 주세요.',
           '이미지가 있으면 이미지의 구도, 보이는 대상, 색감, 표정/분위기를 근거로 장면을 판별해 주세요.',
+          '설명문이 짧아도 이미지와 설명을 함께 보고 어떤 상황이었는지, 어떤 감정이 느껴지는지 스스로 판단해 주세요.',
           '이미지나 설명만으로 확정할 수 없는 내용은 단정하지 말고 추정이라고 표현해 주세요.',
           '',
           text
@@ -394,6 +405,7 @@ async function analyzeWithAI(
           '당신은 AI 기반 추억 관리 서비스의 분석 엔진입니다.',
           '사용자가 저장한 이미지, 사진 설명, 문서 내용, SNS 기록을 한국어로 분석합니다.',
           '장면 판별, 전체 분위기, 사용자가 느꼈을 법한 기분, 추억의 의미를 근거 중심으로 정리합니다.',
+          '이미지와 설명이 함께 들어오면 두 정보를 종합해 그때 어떤 일이 있었는지 event_story에 자연스럽게 설명합니다.',
           '고인이나 가족 관계를 단정하지 말고, 입력에 드러난 정보만 근거로 차분하게 표현합니다.',
           '개인정보, 비밀번호, 연락처 같은 민감정보는 키워드로 뽑지 않습니다.'
         ].join('\n'),
@@ -738,6 +750,31 @@ app.get('/api/files/*', async (c) => {
   }
 })
 
+// Analyze a memory draft with AI before saving or while running in local fallback mode.
+app.post('/api/ai/analyze', async (c) => {
+  const { OPENAI_API_KEY, OPENAI_MODEL } = c.env
+  const body = await c.req.json()
+  const {
+    title = '',
+    description = '',
+    content = '',
+    file_url = null,
+    file_type = null
+  } = body
+
+  const textToAnalyze = `${title}. ${description}. ${content}`.trim()
+  if (!textToAnalyze.replace(/[.\s]/g, '')) {
+    return c.json({ error: '분석할 제목이나 설명을 입력해주세요' }, 400)
+  }
+
+  const analysis = await analyzeWithAI(textToAnalyze, OPENAI_API_KEY, OPENAI_MODEL || 'gpt-5.2', {
+    imageUrl: file_url,
+    fileType: file_type
+  })
+
+  return c.json(analysis)
+})
+
 // Create new memory with AI analysis (protected)
 app.post('/api/memories', authMiddleware, async (c) => {
   const DB = await getDatabase(c.env)
@@ -765,21 +802,39 @@ app.post('/api/memories', authMiddleware, async (c) => {
   let ai_summary = null
   let ai_sentiment = null
   let ai_keywords = null
+  let ai_scene_type = null
+  let ai_atmosphere = null
+  let ai_felt_emotion = null
+  let ai_image_observations = null
+  let ai_event_story = null
+  let ai_memory_meaning = null
+  let ai_confidence = null
 
   if (auto_analyze && (description || content)) {
     const textToAnalyze = `${title}. ${description || ''}. ${content || ''}`
-    const analysis = await analyzeWithAI(textToAnalyze, OPENAI_API_KEY, OPENAI_MODEL || 'gpt-5.2')
+    const analysis = await analyzeWithAI(textToAnalyze, OPENAI_API_KEY, OPENAI_MODEL || 'gpt-5.2', {
+      imageUrl: file_url,
+      fileType: file_type
+    })
     ai_summary = analysis.summary
     ai_sentiment = analysis.sentiment
     ai_keywords = JSON.stringify(uniqueList([...analysis.keywords, ...analysis.recommended_tags], 8))
+    ai_scene_type = analysis.scene_type
+    ai_atmosphere = analysis.atmosphere
+    ai_felt_emotion = analysis.felt_emotion
+    ai_image_observations = analysis.image_observations
+    ai_event_story = analysis.event_story
+    ai_memory_meaning = analysis.memory_meaning
+    ai_confidence = analysis.confidence
   }
 
   const result = await DB.prepare(`
     INSERT INTO memories (
       user_id, category_id, title, description, content,
       file_url, file_type, tags, ai_summary, ai_sentiment, ai_keywords,
-      importance_score, original_date
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ai_scene_type, ai_atmosphere, ai_felt_emotion, ai_image_observations,
+      ai_event_story, ai_memory_meaning, ai_confidence, importance_score, original_date
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     user.id,
     category_id || null,
@@ -792,6 +847,13 @@ app.post('/api/memories', authMiddleware, async (c) => {
     ai_summary,
     ai_sentiment,
     ai_keywords,
+    ai_scene_type,
+    ai_atmosphere,
+    ai_felt_emotion,
+    ai_image_observations,
+    ai_event_story,
+    ai_memory_meaning,
+    ai_confidence,
     importance_score,
     original_date || null
   ).run()
@@ -811,7 +873,7 @@ app.put('/api/memories/:id', authMiddleware, async (c) => {
   const body = await c.req.json()
 
   // Check ownership
-  const existing = await DB.prepare('SELECT user_id FROM memories WHERE id = ?').bind(id).first()
+  const existing = await DB.prepare('SELECT * FROM memories WHERE id = ?').bind(id).first()
   if (!existing || existing.user_id !== user.id) {
     return c.json({ error: 'Unauthorized' }, 403)
   }
@@ -827,13 +889,55 @@ app.put('/api/memories/:id', authMiddleware, async (c) => {
     ai_summary,
     ai_sentiment,
     ai_keywords,
+    ai_scene_type,
+    ai_atmosphere,
+    ai_felt_emotion,
+    ai_image_observations,
+    ai_event_story,
+    ai_memory_meaning,
+    ai_confidence,
     importance_score,
     is_archived,
-    original_date
+    original_date,
+    auto_analyze
   } = body
 
   const updates: string[] = []
   const params: any[] = []
+
+  if (auto_analyze) {
+    const nextTitle = title !== undefined ? title : existing.title
+    const nextDescription = description !== undefined ? description : existing.description
+    const nextContent = content !== undefined ? content : existing.content
+    const nextFileUrl = file_url !== undefined ? file_url : existing.file_url
+    const nextFileType = file_type !== undefined ? file_type : existing.file_type
+    const textToAnalyze = `${nextTitle || ''}. ${nextDescription || ''}. ${nextContent || ''}`
+    const analysis = await analyzeWithAI(textToAnalyze, c.env.OPENAI_API_KEY, c.env.OPENAI_MODEL || 'gpt-5.2', {
+      imageUrl: nextFileUrl,
+      fileType: nextFileType
+    })
+
+    updates.push('ai_summary = ?')
+    params.push(analysis.summary)
+    updates.push('ai_sentiment = ?')
+    params.push(analysis.sentiment)
+    updates.push('ai_keywords = ?')
+    params.push(JSON.stringify(uniqueList([...analysis.keywords, ...analysis.recommended_tags], 8)))
+    updates.push('ai_scene_type = ?')
+    params.push(analysis.scene_type)
+    updates.push('ai_atmosphere = ?')
+    params.push(analysis.atmosphere)
+    updates.push('ai_felt_emotion = ?')
+    params.push(analysis.felt_emotion)
+    updates.push('ai_image_observations = ?')
+    params.push(analysis.image_observations)
+    updates.push('ai_event_story = ?')
+    params.push(analysis.event_story)
+    updates.push('ai_memory_meaning = ?')
+    params.push(analysis.memory_meaning)
+    updates.push('ai_confidence = ?')
+    params.push(analysis.confidence)
+  }
 
   if (category_id !== undefined) {
     updates.push('category_id = ?')
@@ -874,6 +978,34 @@ app.put('/api/memories/:id', authMiddleware, async (c) => {
   if (ai_keywords !== undefined) {
     updates.push('ai_keywords = ?')
     params.push(JSON.stringify(ai_keywords))
+  }
+  if (ai_scene_type !== undefined) {
+    updates.push('ai_scene_type = ?')
+    params.push(ai_scene_type)
+  }
+  if (ai_atmosphere !== undefined) {
+    updates.push('ai_atmosphere = ?')
+    params.push(ai_atmosphere)
+  }
+  if (ai_felt_emotion !== undefined) {
+    updates.push('ai_felt_emotion = ?')
+    params.push(ai_felt_emotion)
+  }
+  if (ai_image_observations !== undefined) {
+    updates.push('ai_image_observations = ?')
+    params.push(ai_image_observations)
+  }
+  if (ai_event_story !== undefined) {
+    updates.push('ai_event_story = ?')
+    params.push(ai_event_story)
+  }
+  if (ai_memory_meaning !== undefined) {
+    updates.push('ai_memory_meaning = ?')
+    params.push(ai_memory_meaning)
+  }
+  if (ai_confidence !== undefined) {
+    updates.push('ai_confidence = ?')
+    params.push(ai_confidence)
   }
   if (importance_score !== undefined) {
     updates.push('importance_score = ?')
@@ -1039,6 +1171,12 @@ app.get('/', (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
+          body {
+            margin: 0;
+          }
+          button, input {
+            font: inherit;
+          }
           .memory-card {
             transition: all 0.3s ease;
             position: relative;
@@ -1105,7 +1243,132 @@ app.get('/', (c) => {
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 1.5rem;
+            background: #ffffff;
+          }
+          .auth-shell {
+            width: min(980px, calc(100vw - 3rem));
+            margin: 0 auto;
+          }
+          .auth-column-title {
+            display: none;
+          }
+          .auth-screen {
+            width: 100%;
+            height: min(720px, calc(100vh - 3rem));
+            min-height: 640px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 26px 70px rgba(79, 70, 229, 0.16);
+            box-sizing: border-box;
+          }
+          .auth-form-panel {
+            width: 360px;
+            min-height: 620px;
+            padding: 2.75rem 2rem 1.75rem;
+            border-radius: 0.7rem;
+            background: #ffffff;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            box-sizing: border-box;
+            overflow: hidden;
+          }
+          .auth-brand-block {
+            height: 132px;
+            flex: 0 0 132px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            text-align: center;
+          }
+          .auth-form-title {
+            height: 34px;
+            flex: 0 0 34px;
+            display: flex;
+            align-items: center;
+            margin: 0 0 1rem;
+          }
+          .auth-form-body {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+          }
+          .auth-form-body > :not([hidden]) ~ :not([hidden]) {
+            margin-top: 0 !important;
+          }
+          .auth-bottom-link {
+            min-height: 32px;
+            flex: 0 0 auto;
+            margin-top: 1rem !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+          }
+          .auth-form-body .auth-primary-button {
+            margin-top: auto;
+          }
+          .auth-login-spacer {
+            height: 4rem;
+            flex: 0 0 4rem;
+          }
+          .auth-input {
+            width: 100%;
+            height: 2.85rem;
+            border-radius: 0.45rem;
+            border: 1px solid #d8e0ec;
+            background: #ffffff;
+            padding: 0.7rem 0.85rem;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+          }
+          .auth-input:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12);
+          }
+          .auth-primary-button {
+            width: 100%;
+            border: 0;
+            border-radius: 0.45rem;
+            padding: 0.9rem 1rem;
+            color: #ffffff;
+            font-weight: 800;
+            cursor: pointer;
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            box-shadow: 0 10px 24px rgba(124, 58, 237, 0.26);
+            transition: all 0.2s ease;
+          }
+          .auth-primary-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 32px rgba(124, 58, 237, 0.36);
+          }
+          @media (max-width: 860px) {
+            .auth-container {
+              padding: 1.5rem;
+            }
+            .auth-shell {
+              max-width: 100%;
+            }
+            .auth-screen {
+              height: calc(100vh - 3rem);
+              min-height: 620px;
+              padding: 1.25rem;
+            }
+            .auth-form-panel {
+              width: min(360px, 100%);
+              min-height: 620px;
+            }
           }
           .hidden { display: none !important; }
           
@@ -1236,82 +1499,73 @@ app.get('/', (c) => {
     <body class="bg-gray-50">
         <!-- Auth Container -->
         <div id="auth-container" class="auth-container">
-            <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
-                <div class="text-center mb-8">
-                    <i class="fas fa-heart text-5xl text-purple-600 mb-4"></i>
-                    <h1 class="text-3xl font-bold text-gray-900">AI 유품 정리</h1>
-                    <p class="text-gray-600 mt-2">소중한 추억을 영원히 간직하세요</p>
-                </div>
-
-                <!-- Login Form -->
-                <div id="login-form" class="space-y-6">
-                    <h2 class="text-2xl font-bold text-gray-900">로그인</h2>
-                    <div id="register-success-message" class="hidden rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                        회원가입이 완료되었습니다. 로그인해 주세요.
-                    </div>
-                    <form id="login-submit" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">이메일</label>
-                            <input type="email" id="login-email" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            <div class="auth-shell">
+                <h2 id="auth-title" class="auth-column-title">회원가입</h2>
+                <div class="auth-screen">
+                    <div id="register-form" class="auth-form-panel">
+                        <div class="auth-brand-block">
+                            <i class="fas fa-heart text-5xl text-purple-600 mb-4"></i>
+                            <h1 class="text-3xl font-extrabold text-gray-900">AI 추억 관리</h1>
+                            <p class="text-xs text-gray-500 mt-2">소중한 추억을 영원히 간직하세요</p>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">비밀번호</label>
-                            <div class="relative">
-                                <input type="password" id="login-password" required class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                                <button type="button" onclick="togglePasswordVisibility('login-password', 'login-password-toggle-icon')" class="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-purple-600 transition" aria-label="비밀번호 보기" title="비밀번호 보기">
-                                    <i id="login-password-toggle-icon" class="fas fa-eye"></i>
-                                </button>
+                        <h3 class="auth-form-title text-xl font-extrabold text-gray-900">회원가입</h3>
+                        <div id="register-success-message" class="hidden rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700 mb-3">
+                            회원가입이 완료되었습니다. 로그인해 주세요.
+                        </div>
+                        <form id="register-submit" class="auth-form-body space-y-5">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">이름</label>
+                                <input type="text" id="register-name" required class="auth-input">
                             </div>
-                        </div>
-                        <button type="submit" class="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold">
-                            로그인
-                        </button>
-                    </form>
-                    <div class="text-center">
-                        <p class="text-gray-600">
-                            계정이 없으신가요?
-                            <button onclick="showRegister()" class="text-purple-600 hover:text-purple-700 font-semibold">
-                                회원가입
-                            </button>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">이메일</label>
+                                <input type="email" id="register-email" required class="auth-input">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">비밀번호</label>
+                                <div class="relative">
+                                    <input type="password" id="register-password" required minlength="6" class="auth-input pr-10">
+                                    <button type="button" onclick="togglePasswordVisibility('register-password', 'register-password-toggle-icon')" class="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-purple-600 transition" aria-label="비밀번호 보기" title="비밀번호 보기">
+                                        <i id="register-password-toggle-icon" class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <p class="text-xs text-green-600 mt-2">비밀번호는 최소 6자 이상으로 작성합니다.</p>
+                            </div>
+                            <button type="submit" class="auth-primary-button">가입하기</button>
+                        </form>
+                        <p class="auth-bottom-link text-sm text-gray-500">
+                            이미 계정이 있으신가요?
+                            <button type="button" onclick="showLogin()" class="text-purple-600 hover:text-purple-700 font-bold">로그인</button>
                         </p>
                     </div>
-                </div>
 
-                <!-- Register Form -->
-                <div id="register-form" class="space-y-6 hidden">
-                    <h2 class="text-2xl font-bold text-gray-900">회원가입</h2>
-                    <form id="register-submit" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">이름</label>
-                            <input type="text" id="register-name" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    <div id="login-form" class="auth-form-panel hidden">
+                        <div class="auth-brand-block">
+                            <i class="fas fa-heart text-5xl text-purple-600 mb-5"></i>
+                            <h1 class="text-3xl font-extrabold text-gray-900">AI 추억 관리</h1>
+                            <p class="text-xs text-gray-500 mt-2">소중한 추억을 영원히 간직하세요</p>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">이메일</label>
-                            <input type="email" id="register-email" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">비밀번호</label>
-                            <div class="relative">
-                                <input type="password" id="register-password" required minlength="6" class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                                <button type="button" onclick="togglePasswordVisibility('register-password', 'register-password-toggle-icon')" class="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-purple-600 transition" aria-label="비밀번호 보기" title="비밀번호 보기">
-                                    <i id="register-password-toggle-icon" class="fas fa-eye"></i>
-                                </button>
+                        <h3 class="auth-form-title text-xl font-extrabold text-gray-900">로그인</h3>
+                        <form id="login-submit" class="auth-form-body space-y-5">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">이메일</label>
+                                <input type="email" id="login-email" required class="auth-input">
                             </div>
-                            <p class="text-xs text-gray-500 mt-1">최소 6자 이상</p>
-                            <p class="text-xs text-green-600 mt-1">
-                                <i class="fas fa-lock mr-1"></i>비밀번호는 SHA-256 암호화 후 저장됩니다.
-                            </p>
-                        </div>
-                        <button type="submit" class="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold">
-                            가입하기
-                        </button>
-                    </form>
-                    <div class="text-center">
-                        <p class="text-gray-600">
-                            이미 계정이 있으신가요?
-                            <button onclick="showLogin()" class="text-purple-600 hover:text-purple-700 font-semibold">
-                                로그인
-                            </button>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">비밀번호</label>
+                                <div class="relative">
+                                    <input type="password" id="login-password" required class="auth-input pr-10">
+                                    <button type="button" onclick="togglePasswordVisibility('login-password', 'login-password-toggle-icon')" class="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-purple-600 transition" aria-label="비밀번호 보기" title="비밀번호 보기">
+                                        <i id="login-password-toggle-icon" class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="auth-login-spacer" aria-hidden="true"></div>
+                            <button type="submit" class="auth-primary-button">로그인</button>
+                        </form>
+                        <p class="auth-bottom-link text-sm text-gray-500">
+                            계정이 없으신가요?
+                            <button type="button" onclick="showRegister()" class="text-purple-600 hover:text-purple-700 font-bold">회원가입</button>
                         </p>
                     </div>
                 </div>
@@ -1609,6 +1863,7 @@ app.get('/', (c) => {
             let categories = [];
             let uploadedFileUrl = null;
             let localMode = false;
+            let appListenersReady = false;
 
             const LOCAL_USER_KEY = 'memorylink_local_user';
             const LOCAL_MEMORIES_KEY = 'memorylink_local_memories';
@@ -1939,6 +2194,8 @@ app.get('/', (c) => {
                 try {
                     const response = await axios.get(\`\${API_BASE}/auth/me\`);
                     currentUser = response.data.user;
+                    localMode = true;
+                    localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
                     showMainApp();
                 } catch (error) {
                     const localUser = localStorage.getItem(LOCAL_USER_KEY);
@@ -1960,21 +2217,34 @@ app.get('/', (c) => {
             function showMainApp() {
                 document.getElementById('auth-container').classList.add('hidden');
                 document.getElementById('main-app').classList.remove('hidden');
-                document.getElementById('user-name').textContent = currentUser.name;
-                document.getElementById('user-avatar').src = currentUser.avatar_url;
-                init();
+                const safeUser = currentUser || {
+                    name: '사용자',
+                    avatar_url: 'https://ui-avatars.com/api/?name=User&background=667eea&color=fff'
+                };
+                document.getElementById('user-name').textContent = safeUser.name || '사용자';
+                document.getElementById('user-avatar').src = safeUser.avatar_url || 'https://ui-avatars.com/api/?name=User&background=667eea&color=fff';
+                init().catch((error) => {
+                    console.error('App init failed:', error);
+                    localMode = true;
+                    renderCategoryChips();
+                    loadStatistics().catch(() => {});
+                    showView('dashboard');
+                });
             }
 
             function showLogin() {
                 document.getElementById('login-form').classList.remove('hidden');
                 document.getElementById('register-form').classList.add('hidden');
-                document.getElementById('register-success-message').classList.add('hidden');
+                document.getElementById('auth-title').textContent = '로그인';
+                document.getElementById('login-email').focus();
             }
 
             function showRegister() {
                 document.getElementById('login-form').classList.add('hidden');
                 document.getElementById('register-form').classList.remove('hidden');
                 document.getElementById('register-success-message').classList.add('hidden');
+                document.getElementById('auth-title').textContent = '회원가입';
+                document.getElementById('register-name').focus();
             }
 
             function togglePasswordVisibility(inputId, iconId) {
@@ -1995,6 +2265,10 @@ app.get('/', (c) => {
                 document.getElementById('register-success-message').classList.remove('hidden');
             }
 
+            if (new URLSearchParams(window.location.search).get('auth') === 'register') {
+                showRegister();
+            }
+
             document.getElementById('login-submit').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const email = document.getElementById('login-email').value;
@@ -2003,6 +2277,8 @@ app.get('/', (c) => {
                 try {
                     const response = await axios.post(\`\${API_BASE}/auth/login\`, { email, password });
                     currentUser = response.data.user;
+                    localMode = true;
+                    localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
                     showMainApp();
                 } catch (error) {
                     localMode = true;
@@ -2043,7 +2319,9 @@ app.get('/', (c) => {
                 
                 try {
                     await axios.post(\`\${API_BASE}/auth/logout\`);
+                    localStorage.removeItem(LOCAL_USER_KEY);
                     currentUser = null;
+                    localMode = false;
                     showAuthContainer();
                 } catch (error) {
                     localStorage.removeItem(LOCAL_USER_KEY);
@@ -2056,16 +2334,19 @@ app.get('/', (c) => {
             // ==================== App Init ====================
             
             async function init() {
+                localMode = true;
                 await loadCategories();
                 await hydrateLocalMemoriesFromServer();
                 removeGraduationSampleText();
-                localMode = true;
                 await loadStatistics();
                 showView('dashboard');
                 setupEventListeners();
             }
 
             function setupEventListeners() {
+                if (appListenersReady) return;
+                appListenersReady = true;
+
                 document.getElementById('category-filter').addEventListener('change', () => {
                     currentPage = 1;
                     renderCategoryChips();
@@ -3054,7 +3335,8 @@ app.get('/', (c) => {
             }
 
             // Initialize on page load
-            checkAuth();
+            showAuthContainer();
+            showRegister();
         </script>
     </body>
     </html>

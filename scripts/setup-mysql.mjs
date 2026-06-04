@@ -25,6 +25,32 @@ const host = process.env.MYSQL_HOST || '127.0.0.1'
 const port = Number(process.env.MYSQL_PORT || '3306')
 const user = process.env.MYSQL_USER || 'root'
 const password = process.env.MYSQL_PASSWORD || ''
+const database = process.env.MYSQL_DATABASE || 'memorylink'
+
+const memoryInsightColumns = [
+  ['ai_scene_type', 'VARCHAR(120) NULL'],
+  ['ai_atmosphere', 'VARCHAR(120) NULL'],
+  ['ai_felt_emotion', 'VARCHAR(120) NULL'],
+  ['ai_image_observations', 'TEXT NULL'],
+  ['ai_event_story', 'TEXT NULL'],
+  ['ai_memory_meaning', 'TEXT NULL'],
+  ['ai_confidence', 'DECIMAL(4,3) NULL']
+]
+
+async function ensureMemoryInsightColumns(connection) {
+  for (const [column, definition] of memoryInsightColumns) {
+    const [rows] = await connection.query(
+      `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'memories' AND COLUMN_NAME = ?`,
+      [database, column]
+    )
+
+    if (rows.length === 0) {
+      await connection.query(`ALTER TABLE \`${database}\`.memories ADD COLUMN ${column} ${definition}`)
+    }
+  }
+}
 
 const connection = await mysql.createConnection({
   host,
