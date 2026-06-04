@@ -2159,6 +2159,14 @@ app.get('/', (c) => {
                 loadMemories();
             }
 
+            function openCategoryBox(categoryId) {
+                document.getElementById('category-filter').value = categoryId || '';
+                currentPage = 1;
+                showView('memories');
+                renderCategoryChips();
+                loadMemories();
+            }
+
             function saveLocalMemory(data, id = null) {
                 const memories = getLocalMemories();
                 const now = new Date().toISOString();
@@ -2554,6 +2562,7 @@ app.get('/', (c) => {
                 const topCategory = activeCategories[0];
                 const total = Number(stats.total) || 0;
                 const topShare = topCategory && total ? Math.round((Number(topCategory.count) / total) * 100) : 0;
+                const emptyVaultCount = total === 0 ? 0 : emptyCategories.length;
 
                 categoriesChart.innerHTML = \`
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -2568,11 +2577,11 @@ app.get('/', (c) => {
                             </div>
                         </div>
                         <div class="p-5 rounded-xl bg-gray-50 border border-gray-100">
-                            <p class="text-sm text-gray-500">비어있는 보관함</p>
-                            <p class="text-3xl font-bold text-gray-900 mt-2">\${emptyCategories.length}</p>
+                            <p class="text-sm text-gray-500">\${total === 0 ? '현재 저장된 보관함' : '비어있는 보관함'}</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-2">\${emptyVaultCount}</p>
                             <div class="mt-4 flex flex-wrap gap-2">
                                 \${emptyCategories.length ? emptyCategories.slice(0, 4).map(cat => \`
-                                    <button onclick="showAddMemory()" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
+                                    <button onclick="openCategoryBox('\${cat.id}')" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
                                         \${cat.icon} \${cat.name}
                                     </button>
                                 \`).join('') : '<span class="px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-sm font-semibold">모든 유형에 기록이 있습니다</span>'}
@@ -2626,6 +2635,7 @@ app.get('/', (c) => {
                     const total = Number(stats.total) || 0;
                     const topShare = topCategory && total ? Math.round((Number(topCategory.count) / total) * 100) : 0;
                     const nextCategories = activeCategories.slice(1, 4);
+                    const emptyVaultCount = total === 0 ? 0 : emptyCategories.length;
 
                     categoriesChart.innerHTML = \`
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -2641,17 +2651,17 @@ app.get('/', (c) => {
                                             </div>
                                         </div>
                                     </div>
-                                    <button onclick="showView('memories')" class="shrink-0 w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 transition">
+                                    <button onclick="openCategoryBox('')" class="shrink-0 w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 transition" title="전체 보관함 보기">
                                         <i class="fas fa-arrow-right"></i>
                                     </button>
                                 </div>
                                 <div class="mt-5 grid grid-cols-3 gap-2">
                                     \${nextCategories.length ? nextCategories.map(cat => \`
-                                        <div class="rounded-lg bg-white/10 p-3">
+                                        <button onclick="openCategoryBox('\${cat.id}')" class="text-left rounded-lg bg-white/10 hover:bg-white/20 p-3 transition">
                                             <p class="text-2xl mb-1">\${cat.icon}</p>
                                             <p class="text-sm font-semibold truncate">\${cat.name}</p>
                                             <p class="text-xs text-slate-300">\${cat.count}개</p>
-                                        </div>
+                                        </button>
                                     \`).join('') : \`
                                         <div class="col-span-3 rounded-lg bg-white/10 p-3 text-sm text-slate-200">
                                             사진, 문서, SNS 등 다양한 기록을 추가해보세요.
@@ -2663,8 +2673,8 @@ app.get('/', (c) => {
                             <div class="p-5 rounded-xl bg-gray-50 border border-gray-100">
                                 <div class="flex items-center justify-between">
                                     <div>
-                                        <p class="text-sm text-gray-500">비어있는 보관함</p>
-                                        <p class="text-3xl font-bold text-gray-900 mt-2">\${emptyCategories.length}</p>
+                                        <p class="text-sm text-gray-500">\${total === 0 ? '현재 저장된 보관함' : '비어있는 보관함'}</p>
+                                        <p class="text-3xl font-bold text-gray-900 mt-2">\${emptyVaultCount}</p>
                                     </div>
                                     <span class="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-purple-600 shadow-sm">
                                         <i class="fas fa-inbox text-xl"></i>
@@ -2672,7 +2682,7 @@ app.get('/', (c) => {
                                 </div>
                                 <div class="mt-4 flex flex-wrap gap-2">
                                     \${emptyCategories.length ? emptyCategories.slice(0, 4).map(cat => \`
-                                        <button onclick="showAddMemory()" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
+                                        <button onclick="openCategoryBox('\${cat.id}')" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
                                             \${cat.icon} \${cat.name}
                                         </button>
                                     \`).join('') : \`
