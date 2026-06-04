@@ -1867,6 +1867,7 @@ app.get('/', (c) => {
 
             const LOCAL_USER_KEY = 'memorylink_local_user';
             const LOCAL_MEMORIES_KEY = 'memorylink_local_memories';
+            const LOCAL_DEMO_SEEDED_KEY = 'memorylink_demo_seeded';
             const LOCAL_CATEGORIES = [
                 { id: 1, name: '사진', icon: '📷', color: '#3B82F6' },
                 { id: 2, name: '동영상', icon: '🎥', color: '#8B5CF6' },
@@ -2028,6 +2029,91 @@ app.get('/', (c) => {
                 };
             }
 
+            function createDemoMemorySamples() {
+                const now = Date.now();
+                const samples = [
+                    {
+                        title: '가족 여행 사진',
+                        category_id: 1,
+                        description: '2023년 여름 제주도에서 가족과 함께 남긴 사진',
+                        content: '바닷가를 걷고 저녁에는 함께 밥을 먹었던 따뜻한 여행 기록입니다.',
+                        file_url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
+                        tags: ['가족', '여행', '제주도'],
+                        importance_score: 5
+                    },
+                    {
+                        title: '할머니의 손편지',
+                        category_id: 3,
+                        description: '할머니께서 보내주신 짧은 손편지',
+                        content: '항상 건강하고 하고 싶은 일을 천천히 해내라는 응원이 담겨 있습니다.',
+                        file_url: null,
+                        tags: ['편지', '가족', '응원'],
+                        importance_score: 5
+                    },
+                    {
+                        title: '친구들과 프로젝트 회의',
+                        category_id: 1,
+                        description: '팀원들과 아이디어를 정리하던 회의 사진',
+                        content: '서로 의견을 나누며 서비스 방향을 정리했던 집중된 분위기의 기록입니다.',
+                        file_url: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=900&q=80',
+                        tags: ['친구', '프로젝트', '회의'],
+                        importance_score: 4
+                    },
+                    {
+                        title: '반려동물 첫 만남',
+                        category_id: 1,
+                        description: '반려견을 처음 만난 날',
+                        content: '처음에는 어색했지만 금방 가까워졌고 설레고 기분 좋은 기억으로 남았습니다.',
+                        file_url: 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=900&q=80',
+                        tags: ['반려동물', '첫만남', '일상'],
+                        importance_score: 5
+                    },
+                    {
+                        title: '새로운 시작을 남긴 SNS 글',
+                        category_id: 4,
+                        description: '새 학기 계획을 정리해서 올린 SNS 게시물',
+                        content: '새로운 목표를 세우고 차근차근 해보겠다는 다짐을 기록했습니다.',
+                        file_url: null,
+                        tags: ['SNS', '새학기', '다짐'],
+                        importance_score: 4
+                    }
+                ];
+
+                return samples.map(function(sample, index) {
+                    const createdAt = new Date(now - index * 86400000).toISOString();
+                    const fileType = sample.file_url ? 'image/jpeg' : null;
+                    return {
+                        id: now + index + 1,
+                        ...sample,
+                        file_type: fileType,
+                        tags: JSON.stringify(sample.tags),
+                        original_date: createdAt,
+                        created_at: createdAt,
+                        updated_at: createdAt,
+                        ...createLocalAIInsights({ ...sample, file_type: fileType })
+                    };
+                });
+            }
+
+            function ensureDemoMemories() {
+                const demoAlreadySeeded = localStorage.getItem(LOCAL_DEMO_SEEDED_KEY) === '1';
+                const existing = getLocalMemories();
+                if (demoAlreadySeeded && existing.length >= 5) return;
+                if (existing.length >= 5) {
+                    localStorage.setItem(LOCAL_DEMO_SEEDED_KEY, '1');
+                    return;
+                }
+
+                const existingTitles = new Set(existing.map(function(memory) { return memory.title; }));
+                const missingSamples = createDemoMemorySamples()
+                    .filter(function(memory) { return !existingTitles.has(memory.title); })
+                    .slice(0, 5 - existing.length);
+
+                if (missingSamples.length > 0) {
+                    saveLocalMemories(existing.concat(missingSamples));
+                }
+                localStorage.setItem(LOCAL_DEMO_SEEDED_KEY, '1');
+            }
             function aiInsightCard(color, icon, title, body) {
                 if (!body) return '';
                 return '<div class="bg-' + color + '-50 p-4 rounded-lg border border-' + color + '-100">' +
@@ -2346,6 +2432,7 @@ app.get('/', (c) => {
                 await loadCategories();
                 await hydrateLocalMemoriesFromServer();
                 removeGraduationSampleText();
+                ensureDemoMemories();
                 await loadStatistics();
                 showView('dashboard');
                 setupEventListeners();
