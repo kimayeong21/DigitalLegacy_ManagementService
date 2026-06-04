@@ -2663,12 +2663,12 @@ app.get('/', (c) => {
                                 </div>
                             </div>
                         </div>
-                        <div class="p-5 rounded-xl bg-gray-50 border border-gray-100">
+                        <div onclick="openCategoryBox('\${emptyCategories[0]?.id || ''}')" role="button" tabindex="0" class="w-full text-left p-5 rounded-xl bg-gray-50 border border-gray-100 hover:border-purple-300 hover:shadow-sm transition cursor-pointer">
                             <p class="text-sm text-gray-500">\${total === 0 ? '현재 저장된 보관함' : '비어있는 보관함'}</p>
                             <p class="text-3xl font-bold text-gray-900 mt-2">\${emptyVaultCount}</p>
                             <div class="mt-4 flex flex-wrap gap-2">
                                 \${emptyCategories.length ? emptyCategories.slice(0, 4).map(cat => \`
-                                    <button onclick="openCategoryBox('\${cat.id}')" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
+                                    <button onclick="event.stopPropagation(); openCategoryBox('\${cat.id}')" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
                                         \${cat.icon} \${cat.name}
                                     </button>
                                 \`).join('') : '<span class="px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-sm font-semibold">모든 유형에 기록이 있습니다</span>'}
@@ -2757,7 +2757,7 @@ app.get('/', (c) => {
                                 </div>
                             </div>
 
-                            <div class="p-5 rounded-xl bg-gray-50 border border-gray-100">
+                            <div onclick="openCategoryBox('\${emptyCategories[0]?.id || ''}')" role="button" tabindex="0" class="w-full text-left p-5 rounded-xl bg-gray-50 border border-gray-100 hover:border-purple-300 hover:shadow-sm transition cursor-pointer">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <p class="text-sm text-gray-500">\${total === 0 ? '현재 저장된 보관함' : '비어있는 보관함'}</p>
@@ -2769,7 +2769,7 @@ app.get('/', (c) => {
                                 </div>
                                 <div class="mt-4 flex flex-wrap gap-2">
                                     \${emptyCategories.length ? emptyCategories.slice(0, 4).map(cat => \`
-                                        <button onclick="openCategoryBox('\${cat.id}')" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
+                                        <button onclick="event.stopPropagation(); openCategoryBox('\${cat.id}')" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
                                             \${cat.icon} \${cat.name}
                                         </button>
                                     \`).join('') : \`
