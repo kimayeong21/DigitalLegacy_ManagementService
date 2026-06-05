@@ -1,0 +1,2278 @@
+
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>AI 기반 디지털 유품 정리 서비스</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <style>
+          body {
+            margin: 0;
+          }
+          button, input {
+            font: inherit;
+          }
+          .memory-card {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+          }
+          .memory-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+          }
+          .memory-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+          }
+          .category-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+          }
+          .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          }
+          .upload-area {
+            border: 2px dashed #cbd5e0;
+            transition: all 0.3s;
+          }
+          .upload-area:hover, .upload-area.dragover {
+            border-color: #667eea;
+            background-color: #f7fafc;
+          }
+          .timeline-item {
+            position: relative;
+            padding-left: 2rem;
+          }
+          .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #667eea, #764ba2);
+          }
+          .timeline-dot {
+            position: absolute;
+            left: -6px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #667eea;
+            border: 3px solid white;
+          }
+          .modal {
+            backdrop-filter: blur(4px);
+          }
+          .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+          .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            background: #ffffff;
+          }
+          .auth-shell {
+            width: min(980px, calc(100vw - 3rem));
+            margin: 0 auto;
+          }
+          .auth-column-title {
+            display: none;
+          }
+          .auth-screen {
+            width: 100%;
+            height: min(720px, calc(100vh - 3rem));
+            min-height: 640px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 26px 70px rgba(79, 70, 229, 0.16);
+            box-sizing: border-box;
+          }
+          .auth-form-panel {
+            width: 360px;
+            min-height: 620px;
+            padding: 2.75rem 2rem 1.75rem;
+            border-radius: 0.7rem;
+            background: #ffffff;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            box-sizing: border-box;
+            overflow: hidden;
+          }
+          .auth-brand-block {
+            height: 132px;
+            flex: 0 0 132px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            text-align: center;
+          }
+          .auth-form-title {
+            height: 34px;
+            flex: 0 0 34px;
+            display: flex;
+            align-items: center;
+            margin: 0 0 1rem;
+          }
+          .auth-form-body {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+          }
+          .auth-form-body > :not([hidden]) ~ :not([hidden]) {
+            margin-top: 0 !important;
+          }
+          .auth-bottom-link {
+            min-height: 32px;
+            flex: 0 0 auto;
+            margin-top: 1rem !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+          }
+          .auth-form-body .auth-primary-button {
+            margin-top: auto;
+          }
+          .auth-login-spacer {
+            height: 4rem;
+            flex: 0 0 4rem;
+          }
+          .auth-input {
+            width: 100%;
+            height: 2.85rem;
+            border-radius: 0.45rem;
+            border: 1px solid #d8e0ec;
+            background: #ffffff;
+            padding: 0.7rem 0.85rem;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+          }
+          .auth-input:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12);
+          }
+          .auth-primary-button {
+            width: 100%;
+            border: 0;
+            border-radius: 0.45rem;
+            padding: 0.9rem 1rem;
+            color: #ffffff;
+            font-weight: 800;
+            cursor: pointer;
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            box-shadow: 0 10px 24px rgba(124, 58, 237, 0.26);
+            transition: all 0.2s ease;
+          }
+          .auth-primary-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 32px rgba(124, 58, 237, 0.36);
+          }
+          @media (max-width: 860px) {
+            .auth-container {
+              padding: 1.5rem;
+            }
+            .auth-shell {
+              max-width: 100%;
+            }
+            .auth-screen {
+              height: calc(100vh - 3rem);
+              min-height: 620px;
+              padding: 1.25rem;
+            }
+            .auth-form-panel {
+              width: min(360px, 100%);
+              min-height: 620px;
+            }
+          }
+          .hidden { display: none !important; }
+          
+          /* Floating Action Button - Enhanced */
+          .fab-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 999;
+            border: none;
+          }
+          .fab-button:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 12px 32px rgba(102, 126, 234, 0.6);
+          }
+          .fab-button:active {
+            transform: scale(0.95) rotate(90deg);
+          }
+          .fab-button i {
+            color: white;
+            font-size: 24px;
+            transition: transform 0.3s;
+          }
+          
+          /* FAB Sub-menu */
+          .fab-menu {
+            position: fixed;
+            bottom: 7rem;
+            right: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            z-index: 998;
+          }
+          .fab-menu-item {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+          }
+          .fab-menu-item.show {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: all;
+          }
+          .fab-menu-button {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          }
+          .fab-menu-button:hover {
+            transform: scale(1.1);
+            background: #667eea;
+            color: white;
+          }
+          .fab-menu-button i {
+            font-size: 18px;
+          }
+          .fab-label {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 24px;
+            font-size: 14px;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+          }
+          
+          @media (max-width: 768px) {
+            .fab-button {
+              bottom: 1.5rem;
+              right: 1.5rem;
+              width: 56px;
+              height: 56px;
+            }
+            .fab-button i {
+              font-size: 20px;
+            }
+            .fab-menu {
+              bottom: 6rem;
+              right: 1.5rem;
+            }
+            .fab-menu-button {
+              width: 44px;
+              height: 44px;
+            }
+            .fab-label {
+              font-size: 12px;
+              padding: 6px 12px;
+            }
+          }
+          .add-memory-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 3px dashed rgba(255, 255, 255, 0.5);
+            transition: all 0.3s;
+            cursor: pointer;
+          }
+          .add-memory-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 16px 40px rgba(102, 126, 234, 0.4);
+            border-color: rgba(255, 255, 255, 0.8);
+          }
+        </style>
+    </head>
+    <body class="bg-gray-50">
+        <!-- Auth Container -->
+        <div id="auth-container" class="auth-container">
+            <div class="auth-shell">
+                <h2 id="auth-title" class="auth-column-title">회원가입</h2>
+                <div class="auth-screen">
+                    <div id="register-form" class="auth-form-panel">
+                        <div class="auth-brand-block">
+                            <i class="fas fa-heart text-5xl text-purple-600 mb-4"></i>
+                            <h1 class="text-3xl font-extrabold text-gray-900">AI 추억 관리</h1>
+                            <p class="text-xs text-gray-500 mt-2">소중한 추억을 영원히 간직하세요</p>
+                        </div>
+                        <h3 class="auth-form-title text-xl font-extrabold text-gray-900">회원가입</h3>
+                        <div id="register-success-message" class="hidden rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700 mb-3">
+                            회원가입이 완료되었습니다. 로그인해 주세요.
+                        </div>
+                        <form id="register-submit" class="auth-form-body space-y-5">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">이름</label>
+                                <input type="text" id="register-name" required class="auth-input">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">이메일</label>
+                                <input type="email" id="register-email" required class="auth-input">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">비밀번호</label>
+                                <div class="relative">
+                                    <input type="password" id="register-password" required minlength="6" class="auth-input pr-10">
+                                    <button type="button" onclick="togglePasswordVisibility('register-password', 'register-password-toggle-icon')" class="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-purple-600 transition" aria-label="비밀번호 보기" title="비밀번호 보기">
+                                        <i id="register-password-toggle-icon" class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <p class="text-xs text-green-600 mt-2">비밀번호는 최소 6자 이상으로 작성합니다.</p>
+                            </div>
+                            <button type="submit" class="auth-primary-button">가입하기</button>
+                        </form>
+                        <p class="auth-bottom-link text-sm text-gray-500">
+                            이미 계정이 있으신가요?
+                            <button type="button" onclick="showLogin()" class="text-purple-600 hover:text-purple-700 font-bold">로그인</button>
+                        </p>
+                    </div>
+
+                    <div id="login-form" class="auth-form-panel hidden">
+                        <div class="auth-brand-block">
+                            <i class="fas fa-heart text-5xl text-purple-600 mb-5"></i>
+                            <h1 class="text-3xl font-extrabold text-gray-900">AI 추억 관리</h1>
+                            <p class="text-xs text-gray-500 mt-2">소중한 추억을 영원히 간직하세요</p>
+                        </div>
+                        <h3 class="auth-form-title text-xl font-extrabold text-gray-900">로그인</h3>
+                        <form id="login-submit" class="auth-form-body space-y-5">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">이메일</label>
+                                <input type="email" id="login-email" required class="auth-input">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1.5">비밀번호</label>
+                                <div class="relative">
+                                    <input type="password" id="login-password" required class="auth-input pr-10">
+                                    <button type="button" onclick="togglePasswordVisibility('login-password', 'login-password-toggle-icon')" class="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-purple-600 transition" aria-label="비밀번호 보기" title="비밀번호 보기">
+                                        <i id="login-password-toggle-icon" class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="auth-login-spacer" aria-hidden="true"></div>
+                            <button type="submit" class="auth-primary-button">로그인</button>
+                        </form>
+                        <p class="auth-bottom-link text-sm text-gray-500">
+                            계정이 없으신가요?
+                            <button type="button" onclick="showRegister()" class="text-purple-600 hover:text-purple-700 font-bold">회원가입</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main App Container (hidden until logged in) -->
+        <div id="main-app" class="hidden">
+            <!-- Header -->
+            <header class="bg-white shadow-sm sticky top-0 z-40">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                    <div class="flex items-center justify-between">
+                        <button onclick="showView('dashboard')" class="flex items-center space-x-3 text-left hover:opacity-80 transition" title="메인화면">
+                            <i class="fas fa-heart text-3xl text-purple-600"></i>
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-900">AI 유품 정리</h1>
+                                <p class="text-xs text-gray-500">소중한 추억 보관 서비스</p>
+                            </div>
+                        </button>
+                        <div class="flex items-center space-x-4">
+                            <nav class="hidden md:flex space-x-2">
+                                <button onclick="showView('dashboard')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
+                                    <i class="fas fa-home mr-1"></i>대시보드
+                                </button>
+                                <button onclick="showView('memories')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
+                                    <i class="fas fa-images mr-1"></i>추억
+                                </button>
+                                <button onclick="showView('timeline')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
+                                    <i class="fas fa-stream mr-1"></i>타임라인
+                                </button>
+                                <button onclick="exportData()" class="px-3 py-2 text-sm text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-lg transition">
+                                    <i class="fas fa-download mr-1"></i>내보내기
+                                </button>
+                                <button onclick="showAddMemory()" class="px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                                    <i class="fas fa-plus mr-1"></i>추억 추가
+                                </button>
+                            </nav>
+                            <div class="flex items-center space-x-2">
+                                <img id="user-avatar" src="" alt="User" class="w-8 h-8 rounded-full">
+                                <span id="user-name" class="text-sm font-medium text-gray-700"></span>
+                                <button onclick="logout()" class="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition font-semibold">
+                                    <i class="fas fa-sign-out-alt mr-1"></i>로그아웃
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Dashboard View -->
+                <div id="dashboard-view" class="view-section">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-3xl font-bold text-gray-900">대시보드</h2>
+                        <button onclick="showAddMemory()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition font-semibold shadow-lg">
+                            <i class="fas fa-plus-circle mr-2"></i>새 추억 추가
+                        </button>
+                    </div>
+                    
+                    <!-- Statistics -->
+                    <div id="statistics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="stat-card text-white p-6 rounded-xl">
+                            <i class="fas fa-database text-3xl mb-2"></i>
+                            <p class="text-sm opacity-90">총 추억</p>
+                            <p id="total-memories" class="text-4xl font-bold">0</p>
+                        </div>
+                        <div class="bg-gradient-to-br from-green-400 to-green-600 text-white p-6 rounded-xl">
+                            <i class="fas fa-smile text-3xl mb-2"></i>
+                            <p class="text-sm opacity-90">긍정적 추억</p>
+                            <p id="positive-memories" class="text-4xl font-bold">0</p>
+                        </div>
+                        <div class="bg-gradient-to-br from-blue-400 to-blue-600 text-white p-6 rounded-xl">
+                            <i class="fas fa-meh text-3xl mb-2"></i>
+                            <p class="text-sm opacity-90">중립적 추억</p>
+                            <p id="neutral-memories" class="text-4xl font-bold">0</p>
+                        </div>
+                        <div class="bg-gradient-to-br from-orange-400 to-orange-600 text-white p-6 rounded-xl">
+                            <i class="fas fa-chart-line text-3xl mb-2"></i>
+                            <p class="text-sm opacity-90">평균 중요도</p>
+                            <p id="avg-importance" class="text-4xl font-bold">0</p>
+                        </div>
+                    </div>
+
+                    <!-- Collection Health -->
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+                        <div class="flex items-center justify-between mb-5">
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-900">보관함 현황</h3>
+                                <p class="text-sm text-gray-500 mt-1">많이 남긴 기록과 아직 비어있는 기록을 한눈에 확인하세요</p>
+                            </div>
+                            <button onclick="showAddMemory()" class="hidden sm:inline-flex items-center px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition font-semibold text-sm">
+                                <i class="fas fa-plus mr-2"></i>바로 추가
+                            </button>
+                        </div>
+                        <div id="categories-chart" class="space-y-4"></div>
+                    </div>
+
+                    <!-- Recent Memories -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-xl font-bold text-gray-900">최근 추억</h3>
+                            <button onclick="showView('memories')" class="text-sm text-purple-600 hover:text-purple-700 font-semibold">
+                                모두 보기 <i class="fas fa-arrow-right ml-1"></i>
+                            </button>
+                        </div>
+                        <div id="recent-memories" class="space-y-3"></div>
+                        
+                        <!-- Quick Add Button in Dashboard -->
+                        <div onclick="showAddMemory()" class="add-memory-card mt-4 p-6 rounded-xl text-white text-center">
+                            <i class="fas fa-plus-circle text-5xl mb-3 opacity-90"></i>
+                            <p class="text-lg font-bold mb-1">첫 번째 추억을 추가하세요</p>
+                            <p class="text-sm opacity-75">클릭하여 소중한 순간을 기록하세요</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memories View -->
+                <div id="memories-view" class="view-section hidden">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                        <div class="flex items-center gap-3">
+                            <button onclick="showView('dashboard')" class="w-11 h-11 rounded-xl bg-white border border-gray-200 text-gray-700 hover:text-purple-700 hover:border-purple-300 hover:bg-purple-50 transition shadow-sm" title="메인화면">
+                                <i class="fas fa-home"></i>
+                            </button>
+                            <h2 class="text-3xl font-bold text-gray-900">내 추억</h2>
+                        </div>
+                        <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                            <button onclick="showView('dashboard')" class="sm:hidden px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition font-semibold shadow-sm">
+                                <i class="fas fa-home mr-2"></i>메인화면
+                            </button>
+                            <button onclick="showAddMemory()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition font-semibold shadow-lg">
+                                <i class="fas fa-plus-circle mr-2"></i>새 추억 추가
+                            </button>
+                            <select id="category-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <option value="">모든 카테고리</option>
+                            </select>
+                            <input id="search-input" type="text" placeholder="검색..." class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        </div>
+                    </div>
+                    <div id="category-chips" class="flex flex-wrap gap-2 mb-6"></div>
+                    
+                    <div id="memories-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Add Memory Card will be injected here -->
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <div id="pagination" class="flex justify-center mt-8 space-x-2"></div>
+                </div>
+
+                <!-- Timeline View -->
+                <div id="timeline-view" class="view-section hidden">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-6">타임라인</h2>
+                    <div id="timeline-content" class="space-y-6"></div>
+                </div>
+
+                <!-- Floating Action Button with Sub-menu -->
+                <div class="fab-menu">
+                    <div class="fab-menu-item" id="fab-photo">
+                        <span class="fab-label">사진 추가</span>
+                        <button onclick="showAddMemory('photo')" class="fab-menu-button">
+                            <i class="fas fa-camera"></i>
+                        </button>
+                    </div>
+                    <div class="fab-menu-item" id="fab-video">
+                        <span class="fab-label">동영상 추가</span>
+                        <button onclick="showAddMemory('video')" class="fab-menu-button">
+                            <i class="fas fa-video"></i>
+                        </button>
+                    </div>
+                    <div class="fab-menu-item" id="fab-document">
+                        <span class="fab-label">문서 추가</span>
+                        <button onclick="showAddMemory('document')" class="fab-menu-button">
+                            <i class="fas fa-file-alt"></i>
+                        </button>
+                    </div>
+                    <div class="fab-menu-item" id="fab-sns">
+                        <span class="fab-label">SNS 게시물</span>
+                        <button onclick="showAddMemory('sns')" class="fab-menu-button">
+                            <i class="fas fa-share-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <button onclick="toggleFabMenu()" class="fab-button" title="추억 추가">
+                    <i class="fas fa-plus"></i>
+                </button>
+
+                <!-- Add/Edit Memory Modal -->
+                <div id="memory-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+                    <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div class="p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 id="modal-title" class="text-2xl font-bold text-gray-900">추억 추가</h3>
+                                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                                    <i class="fas fa-times text-2xl"></i>
+                                </button>
+                            </div>
+                            
+                            <form id="memory-form" class="space-y-4">
+                                <input type="hidden" id="memory-id">
+                                
+                                <!-- File Upload Area -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        파일 업로드 (이미지/동영상)
+                                    </label>
+                                    <div id="upload-area" class="upload-area p-8 rounded-lg text-center cursor-pointer">
+                                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
+                                        <p class="text-sm text-gray-600">클릭하거나 파일을 드래그하세요</p>
+                                        <p class="text-xs text-gray-400 mt-1">스크린샷을 복사 후 Ctrl+V로 붙여넣기 가능</p>
+                                        <p class="text-xs text-gray-400 mt-1">또는 아래에 URL을 직접 입력하세요</p>
+                                        <input type="file" id="file-input" class="hidden" accept="image/*,video/*">
+                                    </div>
+                                    <input type="text" id="file-url" placeholder="또는 파일 URL 입력" class="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm">
+                                    <div id="file-preview" class="mt-2"></div>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">제목 *</label>
+                                    <input type="text" id="title" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
+                                    <select id="category" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                        <option value="">선택하세요</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">설명</label>
+                                    <textarea id="description" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"></textarea>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">내용</label>
+                                    <textarea id="content" rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"></textarea>
+                                </div>
+
+                                <div>
+                                    <label class="flex items-center space-x-2">
+                                        <input type="checkbox" id="auto-analyze" checked class="rounded text-purple-600 focus:ring-purple-500">
+                                        <span class="text-sm text-gray-700">
+                                            <i class="fas fa-robot text-purple-600"></i>
+                                            AI 자동 분석 (요약, 감정, 키워드)
+                                        </span>
+                                    </label>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">중요도 (1-10)</label>
+                                    <input type="range" id="importance-score" min="1" max="10" value="5" class="w-full">
+                                    <div class="flex justify-between text-xs text-gray-500">
+                                        <span>1</span>
+                                        <span id="importance-value" class="font-bold text-purple-600">5</span>
+                                        <span>10</span>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">원본 날짜</label>
+                                    <input type="datetime-local" id="original-date" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                </div>
+                                
+                                <div class="flex justify-end space-x-3 pt-4">
+                                    <button type="button" onclick="closeModal()" class="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                                        취소
+                                    </button>
+                                    <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                                        <i class="fas fa-save mr-2"></i>저장
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memory Detail Modal -->
+                <div id="detail-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+                    <div class="bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div class="p-6" id="detail-content">
+                            <!-- Content loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        <script>
+            const API_BASE = '/api';
+            let currentUser = null;
+            let currentPage = 1;
+            let currentView = 'dashboard';
+            let categories = [];
+            let uploadedFileUrl = null;
+            let localMode = false;
+            let appListenersReady = false;
+
+            const LOCAL_USER_KEY = 'memorylink_local_user';
+            const LOCAL_MEMORIES_KEY = 'memorylink_local_memories';
+            const LOCAL_DEMO_SEEDED_KEY = 'memorylink_demo_seeded';
+            const LOCAL_CATEGORIES = [
+                { id: 1, name: '사진', icon: '📷', color: '#3B82F6' },
+                { id: 2, name: '동영상', icon: '🎥', color: '#8B5CF6' },
+                { id: 3, name: '문서', icon: '📄', color: '#10B981' },
+                { id: 4, name: 'SNS 게시물', icon: '💬', color: '#F59E0B' },
+                { id: 5, name: '이메일', icon: '📧', color: '#EF4444' },
+                { id: 6, name: '음성/통화', icon: '🎙️', color: '#EC4899' },
+                { id: 7, name: '기타', icon: '📦', color: '#6B7280' }
+            ];
+
+            function getLocalMemories() {
+                try {
+                    return JSON.parse(localStorage.getItem(LOCAL_MEMORIES_KEY) || '[]');
+                } catch {
+                    return [];
+                }
+            }
+
+            function saveLocalMemories(memories) {
+                localStorage.setItem(LOCAL_MEMORIES_KEY, JSON.stringify(memories));
+            }
+
+            function removeGraduationSampleText() {
+                const memories = getLocalMemories();
+                let changed = false;
+                const cleaned = memories.filter(memory => {
+                    const isUniversityVideoSample =
+                        memory.title === '대학교 생활 영상' ||
+                        memory.title === '졸업식 영상' ||
+                        memory.description === '대학교 생활 중 남겨둔 영상 기록' ||
+                        memory.description === '대학교 졸업식 영상 기록';
+
+                    if (isUniversityVideoSample) {
+                        changed = true;
+                        return false;
+                    }
+                    return true;
+                }).map(memory => {
+                    const next = { ...memory };
+
+                    if (next.title === '졸업식 영상') {
+                        next.title = '대학교 생활 영상';
+                        changed = true;
+                    }
+                    if (next.description === '대학교 졸업식 영상 기록') {
+                        next.description = '대학교 생활 중 남겨둔 영상 기록';
+                        changed = true;
+                    }
+                    if (next.content === '4년간의 대학 생활을 마무리하는 순간') {
+                        next.content = '아직 이어지고 있는 대학 생활의 소중한 순간';
+                        changed = true;
+                    }
+                    if (next.ai_summary === '대학교 졸업식의 감동적인 순간') {
+                        next.ai_summary = '대학교 생활 중 남겨둔 의미 있는 순간';
+                        changed = true;
+                    }
+                    if (next.tags && String(next.tags).includes('졸업')) {
+                        next.tags = String(next.tags).replace('"졸업", ', '').replace('졸업', '대학교 생활');
+                        changed = true;
+                    }
+
+                    return next;
+                });
+
+                if (changed) {
+                    saveLocalMemories(cleaned);
+                }
+            }
+
+            async function hydrateLocalMemoriesFromServer() {
+                if (getLocalMemories().length > 0) return;
+
+                try {
+                    const response = await axios.get(`${API_BASE}/memories?limit=100`);
+                    const serverMemories = response.data?.data || [];
+                    if (serverMemories.length > 0) {
+                        saveLocalMemories(serverMemories.map(memory => ({
+                            id: memory.id,
+                            title: memory.title,
+                            category_id: memory.category_id,
+                            description: memory.description,
+                            content: memory.content,
+                            file_url: memory.file_url,
+                            file_type: memory.file_type,
+                            importance_score: memory.importance_score || 5,
+                            original_date: memory.original_date,
+                            ai_summary: memory.ai_summary,
+                            ai_sentiment: memory.ai_sentiment,
+                            ai_keywords: memory.ai_keywords,
+                            created_at: memory.created_at,
+                            updated_at: memory.updated_at || memory.created_at
+                        })));
+                    }
+                } catch (error) {
+                    console.log('Local memory hydration skipped:', error.message);
+                }
+            }
+
+
+
+            function escapeHtml(value) {
+                return String(value || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function safeJsonList(value) {
+                if (Array.isArray(value)) return value;
+                try {
+                    const parsed = JSON.parse(value || '[]');
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch {
+                    return [];
+                }
+            }
+
+            function createLocalAIInsights(data) {
+                const text = [data.title, data.description, data.content].filter(Boolean).join(' ');
+                const lower = text.toLowerCase();
+                const hasImage = data.file_type && data.file_type.startsWith('image');
+                const positiveWords = ['행복', '기쁨', '사랑', '즐거', '감사', '소중', '웃음', '좋', '최고', '설렘'];
+                const negativeWords = ['슬픔', '아픔', '힘들', '그립', '외로', '걱정', '후회', '눈물', '미안'];
+                const positiveScore = positiveWords.filter(function(word) { return lower.includes(word); }).length;
+                const negativeScore = negativeWords.filter(function(word) { return lower.includes(word); }).length;
+                const sentiment = positiveScore > negativeScore ? 'positive' : negativeScore > positiveScore ? 'negative' : 'neutral';
+                const words = Array.from(new Set(text.split(/[^0-9A-Za-z가-힣_]+/g).filter(function(word) { return word.length >= 2; }))).slice(0, 6);
+                const keywords = words.length >= 3 ? words : words.concat(['추억', '기록', '보관']).slice(0, 6);
+                const scene = lower.includes('여행') ? '여행과 함께한 추억'
+                    : lower.includes('가족') ? '가족과 함께한 순간'
+                    : lower.includes('학교') || lower.includes('대학교') ? '학교 생활 기록'
+                    : lower.includes('편지') || lower.includes('문서') ? '문서로 남긴 기록'
+                    : hasImage ? '사진으로 남긴 일상 장면'
+                    : '개인 추억 기록';
+                const atmosphere = sentiment === 'positive' ? '따뜻하고 밝은 분위기'
+                    : sentiment === 'negative' ? '차분하고 그리움이 느껴지는 분위기'
+                    : hasImage ? '잔잔하고 자연스러운 분위기'
+                    : '담백하게 정리된 분위기';
+                const feltEmotion = sentiment === 'positive' ? '소중함과 기분 좋은 설렘'
+                    : sentiment === 'negative' ? '그리움과 아쉬움'
+                    : '편안함과 차분함';
+                const firstSentence = text.split(/[.!?。！？]/)[0] || text;
+                const summary = firstSentence ? (firstSentence.length > 90 ? firstSentence.slice(0, 90) + '...' : firstSentence) : '추억의 내용을 분석했습니다.';
+
+                return {
+                    ai_summary: summary,
+                    ai_sentiment: sentiment,
+                    ai_keywords: JSON.stringify(Array.from(new Set(keywords.concat([atmosphere, feltEmotion]))).slice(0, 8)),
+                    ai_scene_type: scene,
+                    ai_atmosphere: atmosphere,
+                    ai_felt_emotion: feltEmotion,
+                    ai_image_observations: hasImage
+                        ? '첨부된 이미지와 입력한 설명을 함께 기준으로 장면과 분위기를 추정했습니다.'
+                        : '이미지는 없지만 제목과 설명문을 기준으로 장면과 감정을 추정했습니다.',
+                    ai_memory_meaning: '이 기록은 당시의 상황과 감정을 다시 떠올릴 수 있게 해 주는 개인적인 추억 자료입니다.',
+                    ai_confidence: hasImage ? 0.62 : 0.55
+                };
+            }
+
+            function createDemoMemorySamples() {
+                const now = Date.now();
+                const samples = [
+                    {
+                        title: '가족 여행 사진',
+                        category_id: 1,
+                        description: '2023년 여름 제주도에서 가족과 함께 남긴 사진',
+                        content: '바닷가를 걷고 저녁에는 함께 밥을 먹었던 따뜻한 여행 기록입니다.',
+                        file_url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
+                        tags: ['가족', '여행', '제주도'],
+                        importance_score: 5
+                    },
+                    {
+                        title: '할머니의 손편지',
+                        category_id: 3,
+                        description: '할머니께서 보내주신 짧은 손편지',
+                        content: '항상 건강하고 하고 싶은 일을 천천히 해내라는 응원이 담겨 있습니다.',
+                        file_url: null,
+                        tags: ['편지', '가족', '응원'],
+                        importance_score: 5
+                    },
+                    {
+                        title: '친구들과 프로젝트 회의',
+                        category_id: 1,
+                        description: '팀원들과 아이디어를 정리하던 회의 사진',
+                        content: '서로 의견을 나누며 서비스 방향을 정리했던 집중된 분위기의 기록입니다.',
+                        file_url: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=900&q=80',
+                        tags: ['친구', '프로젝트', '회의'],
+                        importance_score: 4
+                    },
+                    {
+                        title: '반려동물 첫 만남',
+                        category_id: 1,
+                        description: '반려견을 처음 만난 날',
+                        content: '처음에는 어색했지만 금방 가까워졌고 설레고 기분 좋은 기억으로 남았습니다.',
+                        file_url: 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=900&q=80',
+                        tags: ['반려동물', '첫만남', '일상'],
+                        importance_score: 5
+                    },
+                    {
+                        title: '새로운 시작을 남긴 SNS 글',
+                        category_id: 4,
+                        description: '새 학기 계획을 정리해서 올린 SNS 게시물',
+                        content: '새로운 목표를 세우고 차근차근 해보겠다는 다짐을 기록했습니다.',
+                        file_url: null,
+                        tags: ['SNS', '새학기', '다짐'],
+                        importance_score: 4
+                    }
+                ];
+
+                return samples.map(function(sample, index) {
+                    const createdAt = new Date(now - index * 86400000).toISOString();
+                    const fileType = sample.file_url ? 'image/jpeg' : null;
+                    return {
+                        id: now + index + 1,
+                        ...sample,
+                        file_type: fileType,
+                        tags: JSON.stringify(sample.tags),
+                        original_date: createdAt,
+                        created_at: createdAt,
+                        updated_at: createdAt,
+                        ...createLocalAIInsights({ ...sample, file_type: fileType })
+                    };
+                });
+            }
+
+            function ensureDemoMemories() {
+                const demoAlreadySeeded = localStorage.getItem(LOCAL_DEMO_SEEDED_KEY) === '1';
+                const existing = getLocalMemories();
+                if (demoAlreadySeeded && existing.length >= 5) return;
+                if (existing.length >= 5) {
+                    localStorage.setItem(LOCAL_DEMO_SEEDED_KEY, '1');
+                    return;
+                }
+
+                const existingTitles = new Set(existing.map(function(memory) { return memory.title; }));
+                const missingSamples = createDemoMemorySamples()
+                    .filter(function(memory) { return !existingTitles.has(memory.title); })
+                    .slice(0, 5 - existing.length);
+
+                if (missingSamples.length > 0) {
+                    saveLocalMemories(existing.concat(missingSamples));
+                }
+                localStorage.setItem(LOCAL_DEMO_SEEDED_KEY, '1');
+            }
+            function aiInsightCard(color, icon, title, body) {
+                if (!body) return '';
+                return '<div class="bg-' + color + '-50 p-4 rounded-lg border border-' + color + '-100">' +
+                    '<h4 class="text-sm font-semibold text-' + color + '-900 mb-2"><i class="fas ' + icon + ' mr-2"></i>' + title + '</h4>' +
+                    '<p class="text-' + color + '-800 text-sm">' + escapeHtml(body) + '</p>' +
+                    '</div>';
+            }
+
+            function renderAIInsightBlocks(memory) {
+                const hasInsight = memory.ai_scene_type || memory.ai_atmosphere || memory.ai_felt_emotion || memory.ai_image_observations || memory.ai_memory_meaning;
+                if (!hasInsight) return '';
+
+                const topCards = [
+                    aiInsightCard('indigo', 'fa-image', 'AI 장면 판별', memory.ai_scene_type),
+                    aiInsightCard('amber', 'fa-sun', '분위기', memory.ai_atmosphere),
+                    aiInsightCard('rose', 'fa-heart', '느껴지는 기분', memory.ai_felt_emotion)
+                ].join('');
+
+                const observation = memory.ai_image_observations
+                    ? '<div class="bg-slate-50 p-4 rounded-lg border border-slate-100">' +
+                        '<h4 class="text-sm font-semibold text-slate-900 mb-2"><i class="fas fa-eye mr-2"></i>AI 이미지/설명 관찰</h4>' +
+                        '<p class="text-slate-700 text-sm">' + escapeHtml(memory.ai_image_observations) + '</p>' +
+                    '</div>'
+                    : '';
+
+                const confidence = memory.ai_confidence
+                    ? '<p class="text-xs text-emerald-600 mt-2">분석 신뢰도 ' + Math.round(Number(memory.ai_confidence) * 100) + '%</p>'
+                    : '';
+                const meaning = memory.ai_memory_meaning
+                    ? '<div class="bg-emerald-50 p-4 rounded-lg border border-emerald-100">' +
+                        '<h4 class="text-sm font-semibold text-emerald-900 mb-2"><i class="fas fa-seedling mr-2"></i>추억 의미</h4>' +
+                        '<p class="text-emerald-800 text-sm">' + escapeHtml(memory.ai_memory_meaning) + '</p>' +
+                        confidence +
+                    '</div>'
+                    : '';
+
+                return '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' + topCards + '</div>' + observation + meaning;
+            }
+
+            function enrichMemory(memory) {
+                if (!memory) return null;
+                const category = LOCAL_CATEGORIES.find(cat => cat.id === Number(memory.category_id));
+                return {
+                    ...memory,
+                    category_name: category?.name || '미분류',
+                    category_icon: category?.icon || '✨',
+                    category_color: category?.color || '#6B7280',
+                    connections: memory.connections || []
+                };
+            }
+
+            function getLocalStats() {
+                const memories = getLocalMemories().map(enrichMemory);
+                const byCategory = LOCAL_CATEGORIES.map(cat => ({
+                    ...cat,
+                    count: memories.filter(memory => Number(memory.category_id) === cat.id).length
+                })).sort((a, b) => b.count - a.count);
+
+                return {
+                    total: memories.length,
+                    byCategory,
+                    recent: memories.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5),
+                    sentiments: []
+                };
+            }
+
+            function getLocalPage() {
+                const category = document.getElementById('category-filter').value;
+                const search = document.getElementById('search-input').value.trim().toLowerCase();
+                const limit = 12;
+                let data = getLocalMemories().map(enrichMemory);
+
+                if (category) {
+                    data = data.filter(memory => Number(memory.category_id) === Number(category));
+                }
+                if (search) {
+                    data = data.filter(memory =>
+                        [memory.title, memory.description, memory.content].some(value =>
+                            String(value || '').toLowerCase().includes(search)
+                        )
+                    );
+                }
+
+                data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                const total = data.length;
+                const start = (currentPage - 1) * limit;
+                return {
+                    data: data.slice(start, start + limit),
+                    pagination: {
+                        page: currentPage,
+                        limit,
+                        total,
+                        totalPages: Math.max(1, Math.ceil(total / limit))
+                    }
+                };
+            }
+
+            function renderCategoryChips() {
+                const chips = document.getElementById('category-chips');
+                if (!chips) return;
+
+                const selected = document.getElementById('category-filter').value;
+                const memories = getLocalMemories();
+                const countByCategory = LOCAL_CATEGORIES.reduce((acc, cat) => {
+                    acc[cat.id] = memories.filter(memory => Number(memory.category_id) === cat.id).length;
+                    return acc;
+                }, {});
+
+                const allActive = selected === '';
+                chips.innerHTML = `
+                    <button type="button" onclick="selectCategoryFilter('')" class="px-4 py-2 rounded-full text-sm font-semibold transition ${allActive ? 'bg-purple-600 text-white shadow' : 'bg-white text-gray-700 border border-gray-200 hover:border-purple-300'}">
+                        전체 ${memories.length}
+                    </button>
+                    ${LOCAL_CATEGORIES.map(cat => {
+                        const active = String(selected) === String(cat.id);
+                        return `
+                            <button type="button" onclick="selectCategoryFilter('${cat.id}')" class="px-4 py-2 rounded-full text-sm font-semibold transition ${active ? 'text-white shadow' : 'bg-white text-gray-700 border border-gray-200 hover:border-purple-300'}" style="${active ? `background-color: ${cat.color}` : ''}">
+                                ${cat.icon} ${cat.name} ${countByCategory[cat.id] || 0}
+                            </button>
+                        `;
+                    }).join('')}
+                `;
+            }
+
+            function selectCategoryFilter(categoryId) {
+                document.getElementById('category-filter').value = categoryId;
+                currentPage = 1;
+                renderCategoryChips();
+                loadMemories();
+            }
+
+            function openCategoryBox(categoryId) {
+                document.getElementById('category-filter').value = categoryId || '';
+                currentPage = 1;
+                showView('memories');
+                renderCategoryChips();
+                loadMemories();
+            }
+
+            function saveLocalMemory(data, id = null) {
+                const memories = getLocalMemories();
+                const now = new Date().toISOString();
+                const memoryData = data.auto_analyze ? { ...data, ...createLocalAIInsights(data) } : data;
+
+                if (id) {
+                    const index = memories.findIndex(memory => String(memory.id) === String(id));
+                    if (index !== -1) {
+                        memories[index] = { ...memories[index], ...memoryData, updated_at: now };
+                        saveLocalMemories(memories);
+                        return enrichMemory(memories[index]);
+                    }
+                }
+
+                const memory = {
+                    id: Date.now(),
+                    ...memoryData,
+                    created_at: now,
+                    updated_at: now
+                };
+                memories.unshift(memory);
+                saveLocalMemories(memories);
+                return enrichMemory(memory);
+            }
+
+            function deleteLocalMemory(id) {
+                saveLocalMemories(getLocalMemories().filter(memory => String(memory.id) !== String(id)));
+            }
+
+            // ==================== Auth Functions ====================
+            
+            async function checkAuth() {
+                try {
+                    const response = await axios.get(`${API_BASE}/auth/me`);
+                    currentUser = response.data.user;
+                    localMode = true;
+                    localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
+                    showMainApp();
+                } catch (error) {
+                    const localUser = localStorage.getItem(LOCAL_USER_KEY);
+                    if (localUser) {
+                        localMode = true;
+                        currentUser = JSON.parse(localUser);
+                        showMainApp();
+                    } else {
+                        showAuthContainer();
+                    }
+                }
+            }
+
+            function showAuthContainer() {
+                document.getElementById('auth-container').classList.remove('hidden');
+                document.getElementById('main-app').classList.add('hidden');
+            }
+
+            function showMainApp() {
+                document.getElementById('auth-container').classList.add('hidden');
+                document.getElementById('main-app').classList.remove('hidden');
+                const safeUser = currentUser || {
+                    name: '사용자',
+                    avatar_url: 'https://ui-avatars.com/api/?name=User&background=667eea&color=fff'
+                };
+                document.getElementById('user-name').textContent = safeUser.name || '사용자';
+                document.getElementById('user-avatar').src = safeUser.avatar_url || 'https://ui-avatars.com/api/?name=User&background=667eea&color=fff';
+                init().catch((error) => {
+                    console.error('App init failed:', error);
+                    localMode = true;
+                    renderCategoryChips();
+                    loadStatistics().catch(() => {});
+                    showView('dashboard');
+                });
+            }
+
+            function showLogin() {
+                document.getElementById('login-form').classList.remove('hidden');
+                document.getElementById('register-form').classList.add('hidden');
+                document.getElementById('auth-title').textContent = '로그인';
+                document.getElementById('login-email').focus();
+            }
+
+            function showRegister() {
+                document.getElementById('login-form').classList.add('hidden');
+                document.getElementById('register-form').classList.remove('hidden');
+                document.getElementById('register-success-message').classList.add('hidden');
+                document.getElementById('auth-title').textContent = '회원가입';
+                document.getElementById('register-name').focus();
+            }
+
+            function togglePasswordVisibility(inputId, iconId) {
+                const input = document.getElementById(inputId);
+                const icon = document.getElementById(iconId);
+                const isHidden = input.type === 'password';
+
+                input.type = isHidden ? 'text' : 'password';
+                icon.classList.toggle('fa-eye', !isHidden);
+                icon.classList.toggle('fa-eye-slash', isHidden);
+            }
+
+            function showLoginAfterRegister(email) {
+                showLogin();
+                document.getElementById('login-email').value = email;
+                document.getElementById('login-password').value = '';
+                document.getElementById('register-submit').reset();
+                document.getElementById('register-success-message').classList.remove('hidden');
+            }
+
+            if (new URLSearchParams(window.location.search).get('auth') === 'register') {
+                showRegister();
+            }
+
+            document.getElementById('login-submit').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+
+                try {
+                    const response = await axios.post(`${API_BASE}/auth/login`, { email, password });
+                    currentUser = response.data.user;
+                    localMode = true;
+                    localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
+                    showMainApp();
+                } catch (error) {
+                    localMode = true;
+                    currentUser = {
+                        id: 'local-user',
+                        email,
+                        name: email.split('@')[0] || '사용자',
+                        avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(email.split('@')[0] || 'User')}&background=667eea&color=fff`
+                    };
+                    localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
+                    showMainApp();
+                }
+            });
+
+            document.getElementById('register-submit').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('register-name').value;
+                const email = document.getElementById('register-email').value;
+                const password = document.getElementById('register-password').value;
+
+                try {
+                    await axios.post(`${API_BASE}/auth/register`, { name, email, password });
+                    await axios.post(`${API_BASE}/auth/logout`).catch(() => {});
+                    currentUser = null;
+                    localMode = false;
+                    localStorage.removeItem(LOCAL_USER_KEY);
+                    showLoginAfterRegister(email);
+                } catch (error) {
+                    currentUser = null;
+                    localMode = true;
+                    localStorage.removeItem(LOCAL_USER_KEY);
+                    showLoginAfterRegister(email);
+                }
+            });
+
+            async function logout() {
+                if (!confirm('로그아웃 하시겠습니까?')) return;
+                
+                try {
+                    await axios.post(`${API_BASE}/auth/logout`);
+                    localStorage.removeItem(LOCAL_USER_KEY);
+                    currentUser = null;
+                    localMode = false;
+                    showAuthContainer();
+                } catch (error) {
+                    localStorage.removeItem(LOCAL_USER_KEY);
+                    currentUser = null;
+                    localMode = false;
+                    showAuthContainer();
+                }
+            }
+
+            // ==================== App Init ====================
+            
+            async function init() {
+                localMode = true;
+                await loadCategories();
+                await hydrateLocalMemoriesFromServer();
+                removeGraduationSampleText();
+                ensureDemoMemories();
+                await loadStatistics();
+                showView('dashboard');
+                setupEventListeners();
+            }
+
+            function setupEventListeners() {
+                if (appListenersReady) return;
+                appListenersReady = true;
+
+                document.getElementById('category-filter').addEventListener('change', () => {
+                    currentPage = 1;
+                    renderCategoryChips();
+                    loadMemories();
+                });
+                
+                document.getElementById('search-input').addEventListener('input', debounce(() => {
+                    currentPage = 1;
+                    loadMemories();
+                }, 500));
+                
+                document.getElementById('importance-score').addEventListener('input', (e) => {
+                    document.getElementById('importance-value').textContent = e.target.value;
+                });
+                
+                document.getElementById('memory-form').addEventListener('submit', handleMemorySubmit);
+                
+                const uploadArea = document.getElementById('upload-area');
+                const fileInput = document.getElementById('file-input');
+                
+                uploadArea.addEventListener('click', () => fileInput.click());
+                fileInput.addEventListener('change', handleFileSelect);
+                
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('dragover');
+                });
+                
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('dragover');
+                });
+                
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        fileInput.files = files;
+                        handleFileSelect({ target: fileInput });
+                    }
+                });
+                
+                // 스크린샷 붙여넣기 지원
+                document.addEventListener('paste', handlePaste);
+            }
+            
+            async function handlePaste(e) {
+                // 모달이 열려있을 때만 작동
+                const modal = document.getElementById('memory-modal');
+                if (modal.classList.contains('hidden')) return;
+                
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                        e.preventDefault();
+                        const file = items[i].getAsFile();
+                        if (file) {
+                            // File input에 파일 설정
+                            const dataTransfer = new DataTransfer();
+                            dataTransfer.items.add(file);
+                            document.getElementById('file-input').files = dataTransfer.files;
+                            
+                            // 파일 처리
+                            await handleFileSelect({ target: { files: [file] } });
+                        }
+                        break;
+                    }
+                }
+            }
+
+            async function handleFileSelect(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const preview = document.getElementById('file-preview');
+                const maxSize = 10 * 1024 * 1024; // 10MB
+                
+                if (file.size > maxSize) {
+                    preview.innerHTML = `
+                        <div class="p-3 bg-red-50 rounded-lg border border-red-200">
+                            <p class="text-sm text-red-800">
+                                <i class="fas fa-exclamation-circle"></i>
+                                파일 크기가 너무 큽니다 (최대 10MB)
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                preview.innerHTML = `
+                    <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-spinner fa-spin text-blue-600"></i>
+                            <span class="text-sm text-blue-700">${file.name} 처리 중...</span>
+                        </div>
+                        <span class="text-xs text-blue-500">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                `;
+                
+                // 이미지를 Base64로 변환하여 직접 저장
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        uploadedFileUrl = e.target.result; // Base64 data URL
+                        document.getElementById('file-url').value = uploadedFileUrl;
+                        
+                        preview.innerHTML = `
+                            <div class="p-3 bg-green-50 rounded-lg border border-green-200">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <i class="fas fa-check-circle text-green-600"></i>
+                                    <span class="text-sm text-green-700">이미지 준비 완료!</span>
+                                </div>
+                                <img src="${e.target.result}" class="rounded-lg max-h-48 object-cover w-full">
+                            </div>
+                        `;
+                    };
+                    reader.onerror = () => {
+                        preview.innerHTML = `
+                            <div class="p-3 bg-red-50 rounded-lg border border-red-200">
+                                <p class="text-sm text-red-800">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    파일 읽기 실패
+                                </p>
+                            </div>
+                        `;
+                    };
+                    reader.readAsDataURL(file);
+                    return;
+                }
+                
+                // R2 업로드 시도 (동영상 등)
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const response = await axios.post(`${API_BASE}/upload`, formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                    
+                    uploadedFileUrl = response.data.url;
+                    document.getElementById('file-url').value = uploadedFileUrl;
+                    
+                    preview.innerHTML = `
+                        <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas fa-check-circle text-green-600"></i>
+                                <span class="text-sm text-green-700">업로드 완료!</span>
+                            </div>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.log('R2 업로드 실패:', error.response?.data?.error);
+                    preview.innerHTML = `
+                        <div class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                            <p class="text-sm text-yellow-800">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                R2 업로드 불가 (버킷 미설정)
+                            </p>
+                            <p class="text-xs text-yellow-700 mt-1">
+                                아래 URL 입력란에 외부 URL을 입력하세요
+                            </p>
+                        </div>
+                    `;
+                }
+            }
+
+            async function loadCategories() {
+                try {
+                    const response = await axios.get(`${API_BASE}/categories`);
+                    categories = response.data;
+                    
+                    const categorySelect = document.getElementById('category');
+                    const categoryFilter = document.getElementById('category-filter');
+                    categorySelect.innerHTML = '<option value="">선택하세요</option>';
+                    categoryFilter.innerHTML = '<option value="">모든 카테고리</option>';
+                    
+                    categories.forEach(cat => {
+                        const option = new Option(`${cat.icon} ${cat.name}`, cat.id);
+                        categorySelect.add(option.cloneNode(true));
+                        categoryFilter.add(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading categories:', error);
+                    categories = LOCAL_CATEGORIES;
+                    const categorySelect = document.getElementById('category');
+                    const categoryFilter = document.getElementById('category-filter');
+
+                    categorySelect.innerHTML = '<option value="">선택하세요</option>';
+                    categoryFilter.innerHTML = '<option value="">모든 카테고리</option>';
+                    categories.forEach(cat => {
+                        const option = new Option(`${cat.icon} ${cat.name}`, cat.id);
+                        categorySelect.add(option.cloneNode(true));
+                        categoryFilter.add(option);
+                    });
+                }
+            }
+
+            function renderCollectionStatus(stats) {
+                const categoriesChart = document.getElementById('categories-chart');
+                const categoryStats = stats.byCategory || [];
+                const activeCategories = categoryStats.filter(cat => Number(cat.count) > 0);
+                const emptyCategories = categoryStats.filter(cat => Number(cat.count) === 0);
+                const topCategory = activeCategories[0];
+                const total = Number(stats.total) || 0;
+                const topShare = topCategory && total ? Math.round((Number(topCategory.count) / total) * 100) : 0;
+                const emptyVaultCount = total === 0 ? 0 : emptyCategories.length;
+
+                categoriesChart.innerHTML = `
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="lg:col-span-2 p-5 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-white">
+                            <p class="text-sm text-slate-200">가장 많이 남긴 기록</p>
+                            <div class="flex items-center gap-3 mt-3">
+                                <span class="text-4xl">${topCategory?.icon || '✨'}</span>
+                                <div>
+                                    <p class="text-2xl font-bold">${topCategory?.name || '아직 기록 없음'}</p>
+                                    <p class="text-sm text-slate-300 mt-1">${topCategory ? `${topCategory.count}개 · 전체의 ${topShare}%` : '첫 기록을 추가하면 현황이 채워집니다'}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div onclick="openCategoryBox('${emptyCategories[0]?.id || ''}')" role="button" tabindex="0" class="w-full text-left p-5 rounded-xl bg-gray-50 border border-gray-100 hover:border-purple-300 hover:shadow-sm transition cursor-pointer">
+                            <p class="text-sm text-gray-500">${total === 0 ? '현재 저장된 보관함' : '비어있는 보관함'}</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-2">${emptyVaultCount}</p>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                ${emptyCategories.length ? emptyCategories.slice(0, 4).map(cat => `
+                                    <button onclick="event.stopPropagation(); openCategoryBox('${cat.id}')" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
+                                        ${cat.icon} ${cat.name}
+                                    </button>
+                                `).join('') : '<span class="px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-sm font-semibold">모든 유형에 기록이 있습니다</span>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div class="p-4 rounded-xl bg-purple-50"><p class="text-sm text-purple-700">전체 기록</p><p class="text-2xl font-bold text-purple-900 mt-1">${total}</p></div>
+                        <div class="p-4 rounded-xl bg-blue-50"><p class="text-sm text-blue-700">채워진 유형</p><p class="text-2xl font-bold text-blue-900 mt-1">${activeCategories.length}</p></div>
+                        <div class="p-4 rounded-xl bg-emerald-50"><p class="text-sm text-emerald-700">최근 기록</p><p class="text-2xl font-bold text-emerald-900 mt-1">${stats.recent?.length || 0}</p></div>
+                        <div class="p-4 rounded-xl bg-amber-50"><p class="text-sm text-amber-700">다음 추천</p><p class="text-lg font-bold text-amber-900 mt-2 truncate">${emptyCategories[0]?.name || '추억 정리'}</p></div>
+                    </div>
+                `;
+
+                const recentMemories = document.getElementById('recent-memories');
+                recentMemories.innerHTML = stats.recent.length ? stats.recent.map(memory => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition" onclick="showMemoryDetail(${memory.id})">
+                        <div class="flex items-center space-x-3">
+                            ${memory.file_url && memory.file_type?.startsWith('image') ?
+                                `<img src="${memory.file_url}" class="w-12 h-12 rounded-lg object-cover">` :
+                                `<span class="text-xl">${memory.category_icon || '📦'}</span>`
+                            }
+                            <div>
+                                <p class="font-medium text-gray-900">${memory.title}</p>
+                                <p class="text-xs text-gray-500">${new Date(memory.created_at).toLocaleDateString('ko-KR')}</p>
+                            </div>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-400"></i>
+                    </div>
+                `).join('') : '<div class="p-4 bg-gray-50 rounded-lg text-sm text-gray-500">아직 추가된 기록이 없습니다.</div>';
+            }
+
+            async function loadStatistics() {
+                try {
+                    const stats = localMode ? getLocalStats() : (await axios.get(`${API_BASE}/statistics`)).data;
+                    
+                    document.getElementById('total-memories').textContent = stats.total;
+                    
+                    const sentiments = stats.sentiments.reduce((acc, s) => {
+                        acc[s.ai_sentiment] = s.count;
+                        return acc;
+                    }, {});
+                    document.getElementById('positive-memories').textContent = sentiments.positive || 0;
+                    document.getElementById('neutral-memories').textContent = sentiments.neutral || 0;
+                    
+                    const categoriesChart = document.getElementById('categories-chart');
+                    const categoryStats = stats.byCategory || [];
+                    const activeCategories = categoryStats.filter(cat => Number(cat.count) > 0);
+                    const emptyCategories = categoryStats.filter(cat => Number(cat.count) === 0);
+                    const topCategory = activeCategories[0];
+                    const total = Number(stats.total) || 0;
+                    const topShare = topCategory && total ? Math.round((Number(topCategory.count) / total) * 100) : 0;
+                    const nextCategories = activeCategories.slice(1, 4);
+                    const emptyVaultCount = total === 0 ? 0 : emptyCategories.length;
+
+                    categoriesChart.innerHTML = `
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <div class="lg:col-span-2 p-5 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-white">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div>
+                                        <p class="text-sm text-slate-200">가장 많이 남긴 기록</p>
+                                        <div class="flex items-center gap-3 mt-3">
+                                            <span class="text-4xl">${topCategory?.icon || '✨'}</span>
+                                            <div>
+                                                <p class="text-2xl font-bold">${topCategory?.name || '아직 기록 없음'}</p>
+                                                <p class="text-sm text-slate-300 mt-1">${topCategory ? `${topCategory.count}개 · 전체의 ${topShare}%` : '첫 기록을 추가하면 현황이 채워집니다'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button onclick="openCategoryBox('')" class="shrink-0 w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 transition" title="전체 보관함 보기">
+                                        <i class="fas fa-arrow-right"></i>
+                                    </button>
+                                </div>
+                                <div class="mt-5 grid grid-cols-3 gap-2">
+                                    ${nextCategories.length ? nextCategories.map(cat => `
+                                        <button onclick="openCategoryBox('${cat.id}')" class="text-left rounded-lg bg-white/10 hover:bg-white/20 p-3 transition">
+                                            <p class="text-2xl mb-1">${cat.icon}</p>
+                                            <p class="text-sm font-semibold truncate">${cat.name}</p>
+                                            <p class="text-xs text-slate-300">${cat.count}개</p>
+                                        </button>
+                                    `).join('') : `
+                                        <div class="col-span-3 rounded-lg bg-white/10 p-3 text-sm text-slate-200">
+                                            사진, 문서, SNS 등 다양한 기록을 추가해보세요.
+                                        </div>
+                                    `}
+                                </div>
+                            </div>
+
+                            <div onclick="openCategoryBox('${emptyCategories[0]?.id || ''}')" role="button" tabindex="0" class="w-full text-left p-5 rounded-xl bg-gray-50 border border-gray-100 hover:border-purple-300 hover:shadow-sm transition cursor-pointer">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-sm text-gray-500">${total === 0 ? '현재 저장된 보관함' : '비어있는 보관함'}</p>
+                                        <p class="text-3xl font-bold text-gray-900 mt-2">${emptyVaultCount}</p>
+                                    </div>
+                                    <span class="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-purple-600 shadow-sm">
+                                        <i class="fas fa-inbox text-xl"></i>
+                                    </span>
+                                </div>
+                                <div class="mt-4 flex flex-wrap gap-2">
+                                    ${emptyCategories.length ? emptyCategories.slice(0, 4).map(cat => `
+                                        <button onclick="event.stopPropagation(); openCategoryBox('${cat.id}')" class="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-gray-700 hover:border-purple-300 hover:text-purple-700 transition">
+                                            ${cat.icon} ${cat.name}
+                                        </button>
+                                    `).join('') : `
+                                        <span class="px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-sm font-semibold">
+                                            모든 유형에 기록이 있습니다
+                                        </span>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div class="p-4 rounded-xl bg-purple-50">
+                                <p class="text-sm text-purple-700">전체 기록</p>
+                                <p class="text-2xl font-bold text-purple-900 mt-1">${total}</p>
+                            </div>
+                            <div class="p-4 rounded-xl bg-blue-50">
+                                <p class="text-sm text-blue-700">채워진 유형</p>
+                                <p class="text-2xl font-bold text-blue-900 mt-1">${activeCategories.length}</p>
+                            </div>
+                            <div class="p-4 rounded-xl bg-emerald-50">
+                                <p class="text-sm text-emerald-700">최근 기록</p>
+                                <p class="text-2xl font-bold text-emerald-900 mt-1">${stats.recent?.length || 0}</p>
+                            </div>
+                            <div class="p-4 rounded-xl bg-amber-50">
+                                <p class="text-sm text-amber-700">다음 추천</p>
+                                <p class="text-lg font-bold text-amber-900 mt-2 truncate">${emptyCategories[0]?.name || '추억 정리'}</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    const recentMemories = document.getElementById('recent-memories');
+                    recentMemories.innerHTML = stats.recent.map(memory => `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition" onclick="showMemoryDetail(${memory.id})">
+                            <div class="flex items-center space-x-3">
+                                ${memory.file_url && memory.file_type?.startsWith('image') ? 
+                                    `<img src="${memory.file_url}" class="w-12 h-12 rounded-lg object-cover">` :
+                                    `<span class="text-xl">${memory.category_icon || '📦'}</span>`
+                                }
+                                <div>
+                                    <p class="font-medium text-gray-900">${memory.title}</p>
+                                    <p class="text-xs text-gray-500">${new Date(memory.created_at).toLocaleDateString('ko-KR')}</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400"></i>
+                        </div>
+                    `).join('');
+                } catch (error) {
+                    console.error('Error loading statistics:', error);
+                    localMode = true;
+                    const stats = getLocalStats();
+                    document.getElementById('total-memories').textContent = stats.total;
+                    document.getElementById('positive-memories').textContent = 0;
+                    document.getElementById('neutral-memories').textContent = 0;
+                    renderCollectionStatus(stats);
+                }
+            }
+
+            function renderMemoryCards(data, pagination) {
+                const grid = document.getElementById('memories-grid');
+                grid.innerHTML = data.length ? data.map(memory => `
+                    <div class="memory-card bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer" onclick="showMemoryDetail(${memory.id})">
+                        ${memory.file_url ?
+                            (memory.file_type?.startsWith('image') ?
+                                `<img src="${memory.file_url}" alt="${memory.title}" onerror="this.src='https://via.placeholder.com/400x200?text=이미지+로드+실패'">` :
+                                `<div class="w-full h-48 bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
+                                    <i class="fas fa-video text-white text-4xl"></i>
+                                </div>`
+                            ) :
+                            `<div class="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                                <span class="text-6xl">${memory.category_icon || '📦'}</span>
+                            </div>`
+                        }
+                        <div class="p-4">
+                            <div class="flex items-start justify-between mb-2">
+                                <h3 class="text-lg font-bold text-gray-900 flex-1">${memory.title}</h3>
+                                <div class="flex items-center space-x-1 ml-2">
+                                    ${Array(Math.min(memory.importance_score || 5, 5)).fill('<i class="fas fa-star text-yellow-400 text-xs"></i>').join('')}
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-600 mb-3 line-clamp-2">${memory.description || memory.ai_summary || ''}</p>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-gray-500">${new Date(memory.created_at).toLocaleDateString('ko-KR')}</span>
+                                <span class="category-badge px-2 py-1 rounded-full text-xs" style="background-color: ${memory.category_color}20; color: ${memory.category_color}">
+                                    ${memory.category_name || '미분류'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') : `
+                    <div onclick="showAddMemory()" class="add-memory-card p-8 rounded-xl text-white text-center cursor-pointer">
+                        <i class="fas fa-plus-circle text-5xl mb-3 opacity-90"></i>
+                        <p class="text-lg font-bold mb-1">첫 기록 추가하기</p>
+                        <p class="text-sm opacity-75">클릭해서 저장 테스트를 시작하세요</p>
+                    </div>
+                `;
+                renderPagination(pagination);
+            }
+
+            async function loadMemories() {
+                try {
+                    renderCategoryChips();
+                    const category = document.getElementById('category-filter').value;
+                    const search = document.getElementById('search-input').value;
+                    
+                    const params = {
+                        page: currentPage,
+                        limit: 12,
+                        ...(category && { category }),
+                        ...(search && { search })
+                    };
+                    
+                    const { data, pagination } = localMode ? getLocalPage() : (await axios.get(`${API_BASE}/memories`, { params })).data;
+                    renderMemoryCards(data, pagination);
+                    /*
+                        <div class="memory-card bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer" onclick="showMemoryDetail(${memory.id})">
+                            ${memory.file_url ? 
+                                (memory.file_type?.startsWith('image') ? 
+                                    `<img src="${memory.file_url}" alt="${memory.title}" onerror="this.src='https://via.placeholder.com/400x200?text=이미지+로드+실패'">` :
+                                    `<div class="w-full h-48 bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
+                                        <i class="fas fa-video text-white text-4xl"></i>
+                                    </div>`
+                                ) :
+                                `<div class="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                                    <span class="text-6xl">${memory.category_icon || '📦'}</span>
+                                </div>`
+                            }
+                            <div class="p-4">
+                                <div class="flex items-start justify-between mb-2">
+                                    <h3 class="text-lg font-bold text-gray-900 flex-1">${memory.title}</h3>
+                                    <div class="flex items-center space-x-1 ml-2">
+                                        ${Array(Math.min(memory.importance_score || 5, 5)).fill('<i class="fas fa-star text-yellow-400 text-xs"></i>').join('')}
+                                    </div>
+                                </div>
+                                <p class="text-sm text-gray-600 mb-3 line-clamp-2">${memory.description || memory.ai_summary || ''}</p>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-gray-500">${new Date(memory.created_at).toLocaleDateString('ko-KR')}</span>
+                                    <div class="flex items-center space-x-2">
+                                        ${memory.ai_sentiment ? `
+                                            <span class="px-2 py-1 rounded-full ${
+                                                memory.ai_sentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                                                memory.ai_sentiment === 'negative' ? 'bg-red-100 text-red-700' :
+                                                'bg-gray-100 text-gray-700'
+                                            }">
+                                                ${memory.ai_sentiment === 'positive' ? '😊' : memory.ai_sentiment === 'negative' ? '😢' : '😐'}
+                                            </span>
+                                        ` : ''}
+                                        <span class="category-badge px-2 py-1 rounded-full text-xs" style="background-color: ${memory.category_color}20; color: ${memory.category_color}">
+                                            ${memory.category_name || '미분류'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                    */
+                } catch (error) {
+                    console.error('Error loading memories:', error);
+                    localMode = true;
+                    const { data, pagination } = getLocalPage();
+                    renderMemoryCards(data, pagination);
+                }
+            }
+
+            async function loadTimeline() {
+                try {
+                    const memories = localMode
+                        ? getLocalMemories().map(enrichMemory)
+                        : (await axios.get(`${API_BASE}/memories?limit=100`)).data.data;
+                    
+                    const grouped = memories.reduce((acc, memory) => {
+                        const date = new Date(memory.original_date || memory.created_at);
+                        const year = date.getFullYear();
+                        const month = date.getMonth();
+                        const key = `${year}-${month}`;
+                        
+                        if (!acc[key]) {
+                            acc[key] = {
+                                year,
+                                month,
+                                monthName: date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' }),
+                                memories: []
+                            };
+                        }
+                        acc[key].memories.push(memory);
+                        return acc;
+                    }, {});
+                    
+                    const timeline = document.getElementById('timeline-content');
+                    timeline.innerHTML = Object.values(grouped)
+                        .sort((a, b) => b.year - a.year || b.month - a.month)
+                        .map(group => `
+                            <div class="timeline-item">
+                                <div class="timeline-dot"></div>
+                                <h3 class="text-xl font-bold text-purple-600 mb-4">${group.monthName}</h3>
+                                <div class="space-y-3">
+                                    ${group.memories.map(memory => `
+                                        <div class="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition cursor-pointer" onclick="showMemoryDetail(${memory.id})">
+                                            <div class="flex items-start space-x-3">
+                                                ${memory.file_url && memory.file_type?.startsWith('image') ? 
+                                                    `<img src="${memory.file_url}" class="w-16 h-16 rounded-lg object-cover">` :
+                                                    `<span class="text-2xl">${memory.category_icon || '📦'}</span>`
+                                                }
+                                                <div class="flex-1">
+                                                    <h4 class="font-semibold text-gray-900">${memory.title}</h4>
+                                                    <p class="text-sm text-gray-600 mt-1">${memory.description || memory.ai_summary || ''}</p>
+                                                    <p class="text-xs text-gray-400 mt-2">${new Date(memory.created_at).toLocaleString('ko-KR')}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('');
+                } catch (error) {
+                    console.error('Error loading timeline:', error);
+                    localMode = true;
+                    const memories = getLocalMemories().map(enrichMemory);
+                    document.getElementById('timeline-content').innerHTML = memories.length
+                        ? memories.map(memory => `
+                            <div class="timeline-item">
+                                <div class="timeline-dot"></div>
+                                <div class="bg-white p-4 rounded-lg shadow-sm cursor-pointer" onclick="showMemoryDetail(${memory.id})">
+                                    <h4 class="font-semibold text-gray-900">${memory.title}</h4>
+                                    <p class="text-sm text-gray-600 mt-1">${memory.description || memory.content || ''}</p>
+                                    <p class="text-xs text-gray-400 mt-2">${new Date(memory.created_at).toLocaleString('ko-KR')}</p>
+                                </div>
+                            </div>
+                        `).join('')
+                        : '<div class="bg-white p-6 rounded-lg text-gray-500">아직 추가된 기록이 없습니다.</div>';
+                }
+            }
+
+            function renderPagination(pagination) {
+                const paginationEl = document.getElementById('pagination');
+                const pages = [];
+                
+                const maxPages = Math.min(pagination.totalPages, 10);
+                for (let i = 1; i <= maxPages; i++) {
+                    pages.push(`
+                        <button onclick="goToPage(${i})" class="px-4 py-2 ${i === pagination.page ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 hover:bg-purple-50'} rounded-lg border transition">
+                            ${i}
+                        </button>
+                    `);
+                }
+                
+                paginationEl.innerHTML = pages.join('');
+            }
+
+            function goToPage(page) {
+                currentPage = page;
+                loadMemories();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            async function showMemoryDetail(id) {
+                try {
+                    const memory = localMode
+                        ? enrichMemory(getLocalMemories().find(item => String(item.id) === String(id)))
+                        : (await axios.get(`${API_BASE}/memories/${id}`)).data;
+                    if (!memory) {
+                        throw new Error('Memory not found');
+                    }
+                    
+                    const content = document.getElementById('detail-content');
+                    content.innerHTML = `
+                        <div class="flex justify-between items-start mb-6">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-3xl">${memory.category_icon || '📦'}</span>
+                                <div>
+                                    <h3 class="text-2xl font-bold text-gray-900">${memory.title}</h3>
+                                    <p class="text-sm text-gray-500">${new Date(memory.created_at).toLocaleDateString('ko-KR')}</p>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="editMemory(${memory.id})" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="deleteMemory(${memory.id})" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                <button onclick="closeDetailModal()" class="p-2 text-gray-500 hover:bg-gray-50 rounded-lg transition">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        ${memory.file_url ? `
+                            <div class="mb-6">
+                                ${memory.file_type?.startsWith('image') ? 
+                                    `<img src="${memory.file_url}" alt="${memory.title}" class="w-full rounded-lg shadow-lg">` :
+                                    `<video src="${memory.file_url}" controls class="w-full rounded-lg shadow-lg"></video>`
+                                }
+                            </div>
+                        ` : ''}
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-700 mb-2">설명</h4>
+                                <p class="text-gray-600">${memory.description || '없음'}</p>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-700 mb-2">내용</h4>
+                                <p class="text-gray-600 whitespace-pre-wrap">${memory.content || '없음'}</p>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-4 text-sm">
+                                <div>
+                                    <span class="text-gray-700 font-medium">중요도:</span>
+                                    <span class="ml-2">${Array(memory.importance_score || 5).fill('⭐').join('')}</span>
+                                </div>
+                                ${memory.ai_sentiment ? `
+                                    <div>
+                                        <span class="text-gray-700 font-medium">감정:</span>
+                                        <span class="ml-2 px-2 py-1 rounded-full text-xs ${memory.ai_sentiment === 'positive' ? 'bg-green-100 text-green-700' : memory.ai_sentiment === 'negative' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}">
+                                            ${memory.ai_sentiment === 'positive' ? '😊 긍정' : memory.ai_sentiment === 'negative' ? '😢 부정' : '😐 중립'}
+                                        </span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            
+                            ${memory.ai_summary ? `
+                                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                    <h4 class="text-sm font-semibold text-blue-900 mb-2">
+                                        <i class="fas fa-robot mr-2"></i>AI 요약
+                                    </h4>
+                                    <p class="text-blue-800">${memory.ai_summary}</p>
+                                </div>
+                            ` : ''}
+                            
+                            ${renderAIInsightBlocks(memory)}
+                            ${memory.ai_keywords ? `
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-700 mb-2">
+                                        <i class="fas fa-tags mr-2"></i>AI 키워드
+                                    </h4>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${safeJsonList(memory.ai_keywords).map(kw => `
+                                            <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">${kw}</span>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${memory.connections && memory.connections.length > 0 ? `
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-700 mb-2">
+                                        <i class="fas fa-link mr-2"></i>연결된 추억
+                                    </h4>
+                                    <div class="space-y-2">
+                                        ${memory.connections.map(conn => `
+                                            <div class="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition" onclick="showMemoryDetail(${conn.id})">
+                                                <p class="font-medium text-gray-900">${conn.title}</p>
+                                                <p class="text-xs text-gray-500">${conn.connection_type} (강도: ${conn.strength}/10)</p>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                    
+                    document.getElementById('detail-modal').classList.remove('hidden');
+                    document.getElementById('detail-modal').classList.add('flex');
+                } catch (error) {
+                    console.error('Error loading memory detail:', error);
+                    const memory = enrichMemory(getLocalMemories().find(item => String(item.id) === String(id)));
+                    if (memory) {
+                        localMode = true;
+                        const content = document.getElementById('detail-content');
+                        content.innerHTML = `
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-3xl">${memory.category_icon || '📦'}</span>
+                                    <div>
+                                        <h3 class="text-2xl font-bold text-gray-900">${memory.title}</h3>
+                                        <p class="text-sm text-gray-500">${new Date(memory.created_at).toLocaleDateString('ko-KR')}</p>
+                                    </div>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button onclick="editMemory(${memory.id})" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"><i class="fas fa-edit"></i></button>
+                                    <button onclick="deleteMemory(${memory.id})" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"><i class="fas fa-trash"></i></button>
+                                    <button onclick="closeDetailModal()" class="p-2 text-gray-500 hover:bg-gray-50 rounded-lg transition"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                            ${memory.file_url ? `<div class="mb-6">${memory.file_type?.startsWith('image') ? `<img src="${memory.file_url}" alt="${memory.title}" class="w-full rounded-lg shadow-lg">` : `<video src="${memory.file_url}" controls class="w-full rounded-lg shadow-lg"></video>`}</div>` : ''}
+                            <div class="space-y-4">
+                                <div><h4 class="text-sm font-semibold text-gray-700 mb-2">설명</h4><p class="text-gray-600">${memory.description || '없음'}</p></div>
+                                <div><h4 class="text-sm font-semibold text-gray-700 mb-2">내용</h4><p class="text-gray-600 whitespace-pre-wrap">${memory.content || '없음'}</p></div>
+                            </div>
+                        `;
+                        document.getElementById('detail-modal').classList.remove('hidden');
+                        document.getElementById('detail-modal').classList.add('flex');
+                    } else {
+                        alert('추억을 불러오는데 실패했습니다.');
+                    }
+                }
+            }
+
+            function closeDetailModal() {
+                document.getElementById('detail-modal').classList.add('hidden');
+                document.getElementById('detail-modal').classList.remove('flex');
+            }
+
+            let fabMenuOpen = false;
+            
+            function toggleFabMenu() {
+                fabMenuOpen = !fabMenuOpen;
+                const mainFab = document.querySelector('.fab-button i');
+                const photoItem = document.getElementById('fab-photo');
+                const videoItem = document.getElementById('fab-video');
+                const docItem = document.getElementById('fab-document');
+                const snsItem = document.getElementById('fab-sns');
+                
+                if (fabMenuOpen) {
+                    mainFab.style.transform = 'rotate(45deg)';
+                    setTimeout(() => photoItem.classList.add('show'), 50);
+                    setTimeout(() => videoItem.classList.add('show'), 100);
+                    setTimeout(() => docItem.classList.add('show'), 150);
+                    setTimeout(() => snsItem.classList.add('show'), 200);
+                } else {
+                    mainFab.style.transform = 'rotate(0deg)';
+                    photoItem.classList.remove('show');
+                    videoItem.classList.remove('show');
+                    docItem.classList.remove('show');
+                    snsItem.classList.remove('show');
+                }
+            }
+            
+            function showAddMemory(type = null) {
+                // Close FAB menu if open
+                if (fabMenuOpen) {
+                    toggleFabMenu();
+                }
+                
+                document.getElementById('modal-title').textContent = '추억 추가';
+                document.getElementById('memory-form').reset();
+                document.getElementById('memory-id').value = '';
+                document.getElementById('file-preview').innerHTML = '';
+                uploadedFileUrl = null;
+                
+                // Pre-select category based on type
+                const categorySelect = document.getElementById('category');
+                const selectedFilter = document.getElementById('category-filter')?.value;
+                if (selectedFilter) {
+                    categorySelect.value = selectedFilter;
+                }
+                if (type === 'photo') {
+                    categorySelect.value = '1'; // 사진
+                    document.getElementById('modal-title').textContent = '📷 사진 추가';
+                } else if (type === 'video') {
+                    categorySelect.value = '2'; // 동영상
+                    document.getElementById('modal-title').textContent = '🎥 동영상 추가';
+                } else if (type === 'document') {
+                    categorySelect.value = '3'; // 문서
+                    document.getElementById('modal-title').textContent = '📄 문서 추가';
+                } else if (type === 'sns') {
+                    categorySelect.value = '4'; // SNS 게시물
+                    document.getElementById('modal-title').textContent = '💬 SNS 게시물 추가';
+                }
+                
+                document.getElementById('memory-modal').classList.remove('hidden');
+                document.getElementById('memory-modal').classList.add('flex');
+            }
+
+            async function editMemory(id) {
+                try {
+                    const memory = localMode
+                        ? enrichMemory(getLocalMemories().find(item => String(item.id) === String(id)))
+                        : (await axios.get(`${API_BASE}/memories/${id}`)).data;
+                    if (!memory) {
+                        throw new Error('Memory not found');
+                    }
+                    
+                    document.getElementById('modal-title').textContent = '추억 수정';
+                    document.getElementById('memory-id').value = memory.id;
+                    document.getElementById('title').value = memory.title;
+                    document.getElementById('category').value = memory.category_id || '';
+                    document.getElementById('description').value = memory.description || '';
+                    document.getElementById('content').value = memory.content || '';
+                    document.getElementById('file-url').value = memory.file_url || '';
+                    document.getElementById('importance-score').value = memory.importance_score || 5;
+                    document.getElementById('importance-value').textContent = memory.importance_score || 5;
+                    
+                    if (memory.original_date) {
+                        const date = new Date(memory.original_date);
+                        document.getElementById('original-date').value = date.toISOString().slice(0, 16);
+                    }
+                    
+                    if (memory.file_url) {
+                        const preview = document.getElementById('file-preview');
+                        if (memory.file_type?.startsWith('image')) {
+                            preview.innerHTML = `<img src="${memory.file_url}" class="mt-2 rounded-lg max-h-48 object-cover">`;
+                        }
+                    }
+                    
+                    closeDetailModal();
+                    document.getElementById('memory-modal').classList.remove('hidden');
+                    document.getElementById('memory-modal').classList.add('flex');
+                } catch (error) {
+                    console.error('Error loading memory:', error);
+                    const memory = enrichMemory(getLocalMemories().find(item => String(item.id) === String(id)));
+                    if (memory) {
+                        localMode = true;
+                        document.getElementById('modal-title').textContent = '추억 수정';
+                        document.getElementById('memory-id').value = memory.id;
+                        document.getElementById('title').value = memory.title;
+                        document.getElementById('category').value = memory.category_id || '';
+                        document.getElementById('description').value = memory.description || '';
+                        document.getElementById('content').value = memory.content || '';
+                        document.getElementById('file-url').value = memory.file_url || '';
+                        document.getElementById('importance-score').value = memory.importance_score || 5;
+                        document.getElementById('importance-value').textContent = memory.importance_score || 5;
+                        closeDetailModal();
+                        document.getElementById('memory-modal').classList.remove('hidden');
+                        document.getElementById('memory-modal').classList.add('flex');
+                    } else {
+                        alert('추억을 불러오는데 실패했습니다.');
+                    }
+                }
+            }
+
+            async function handleMemorySubmit(e) {
+                e.preventDefault();
+                
+                const id = document.getElementById('memory-id').value;
+                const fileUrl = uploadedFileUrl || document.getElementById('file-url').value;
+                
+                const data = {
+                    title: document.getElementById('title').value,
+                    category_id: document.getElementById('category').value ? parseInt(document.getElementById('category').value) : null,
+                    description: document.getElementById('description').value,
+                    content: document.getElementById('content').value,
+                    file_url: fileUrl || null,
+                    file_type: fileUrl ? ((fileUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i) || fileUrl.includes('images.unsplash.com') || document.getElementById('category').value === '1') ? 'image' : 'video') : null,
+                    importance_score: parseInt(document.getElementById('importance-score').value),
+                    original_date: document.getElementById('original-date').value || null,
+                    auto_analyze: document.getElementById('auto-analyze').checked
+                };
+                
+                try {
+                    if (localMode) {
+                        saveLocalMemory(data, id || null);
+                    } else if (id) {
+                        await axios.put(`${API_BASE}/memories/${id}`, data);
+                    } else {
+                        await axios.post(`${API_BASE}/memories`, data);
+                    }
+                    
+                    closeModal();
+                    if (currentView === 'memories') {
+                        loadMemories();
+                    } else if (currentView === 'timeline') {
+                        loadTimeline();
+                    } else {
+                        loadStatistics();
+                    }
+                    alert('저장되었습니다!');
+                } catch (error) {
+                    console.error('Error saving memory:', error);
+                    localMode = true;
+                    saveLocalMemory(data, id || null);
+                    closeModal();
+                    renderCategoryChips();
+                    if (currentView === 'memories') {
+                        loadMemories();
+                    } else if (currentView === 'timeline') {
+                        loadTimeline();
+                    } else {
+                        loadStatistics();
+                    }
+                    alert('저장되었습니다!');
+                }
+            }
+
+            async function deleteMemory(id) {
+                if (!confirm('정말 삭제하시겠습니까?')) return;
+                
+                try {
+                    if (localMode) {
+                        deleteLocalMemory(id);
+                    } else {
+                        await axios.delete(`${API_BASE}/memories/${id}`);
+                    }
+                    closeDetailModal();
+                    if (currentView === 'memories') {
+                        loadMemories();
+                    } else if (currentView === 'timeline') {
+                        loadTimeline();
+                    } else {
+                        loadStatistics();
+                    }
+                    alert('삭제되었습니다.');
+                } catch (error) {
+                    console.error('Error deleting memory:', error);
+                    localMode = true;
+                    deleteLocalMemory(id);
+                    closeDetailModal();
+                    if (currentView === 'memories') {
+                        loadMemories();
+                    } else if (currentView === 'timeline') {
+                        loadTimeline();
+                    } else {
+                        loadStatistics();
+                    }
+                    alert('삭제되었습니다.');
+                }
+            }
+
+            async function exportData() {
+                try {
+                    const response = await axios.get(`${API_BASE}/export`);
+                    const data = response.data;
+                    
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `memorylink-export-${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    
+                    alert('데이터를 내보냈습니다!');
+                } catch (error) {
+                    console.error('Error exporting data:', error);
+                    alert('내보내기에 실패했습니다.');
+                }
+            }
+
+            function closeModal() {
+                document.getElementById('memory-modal').classList.add('hidden');
+                document.getElementById('memory-modal').classList.remove('flex');
+            }
+
+            function showView(view) {
+                currentView = view;
+                document.getElementById('dashboard-view').classList.toggle('hidden', view !== 'dashboard');
+                document.getElementById('memories-view').classList.toggle('hidden', view !== 'memories');
+                document.getElementById('timeline-view').classList.toggle('hidden', view !== 'timeline');
+                
+                if (view === 'memories') {
+                    loadMemories();
+                } else if (view === 'dashboard') {
+                    loadStatistics();
+                } else if (view === 'timeline') {
+                    loadTimeline();
+                }
+            }
+
+            function debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+
+            // Initialize on page load
+            showAuthContainer();
+            showRegister();
+        </script>
+    </body>
+    </html>
+  
