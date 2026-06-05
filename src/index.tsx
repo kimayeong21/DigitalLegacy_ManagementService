@@ -1243,26 +1243,29 @@ app.get('/', (c) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1rem;
-            background: #ffffff;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             box-sizing: border-box;
           }
           .auth-shell {
-            width: min(980px, calc(100vw - 2rem));
+            width: 100%;
+            min-height: 100vh;
             margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
           .auth-column-title {
             display: none;
           }
           .auth-screen {
             width: 100%;
-            height: min(690px, calc(100vh - 2rem));
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1.5rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            box-shadow: 0 26px 70px rgba(79, 70, 229, 0.16);
+            padding: 2rem 1rem;
+            background: transparent;
             box-sizing: border-box;
           }
           .auth-form-panel {
@@ -1359,14 +1362,14 @@ app.get('/', (c) => {
           }
           @media (max-width: 860px) {
             .auth-container {
-              padding: 1rem;
+              padding: 0;
             }
             .auth-shell {
-              max-width: 100%;
+              width: 100%;
             }
             .auth-screen {
-              height: calc(100vh - 2rem);
-              padding: 1.25rem;
+              min-height: 100vh;
+              padding: 1rem;
             }
             .auth-form-panel {
               width: min(360px, 100%);
