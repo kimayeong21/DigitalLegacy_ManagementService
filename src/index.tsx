@@ -1281,6 +1281,9 @@ app.get('/', (c) => {
             box-sizing: border-box;
             overflow: hidden;
           }
+          #login-form {
+            justify-content: center;
+          }
           .auth-brand-block {
             height: 132px;
             flex: 0 0 132px;
@@ -1304,6 +1307,9 @@ app.get('/', (c) => {
             gap: 1rem;
             min-height: 0;
           }
+          #login-submit {
+            flex: 0 0 auto;
+          }
           .auth-form-body > :not([hidden]) ~ :not([hidden]) {
             margin-top: 0 !important;
           }
@@ -1325,8 +1331,8 @@ app.get('/', (c) => {
             margin-top: 0.35rem;
           }
           .auth-login-spacer {
-            height: 5.5rem;
-            flex: 0 0 5.5rem;
+            height: 1rem;
+            flex: 0 0 1rem;
           }
           .auth-input {
             width: 100%;
