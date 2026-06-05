@@ -1243,11 +1243,12 @@ app.get('/', (c) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1.5rem;
+            padding: 1rem;
             background: #ffffff;
+            box-sizing: border-box;
           }
           .auth-shell {
-            width: min(980px, calc(100vw - 3rem));
+            width: min(980px, calc(100vw - 2rem));
             margin: 0 auto;
           }
           .auth-column-title {
@@ -1255,20 +1256,19 @@ app.get('/', (c) => {
           }
           .auth-screen {
             width: 100%;
-            height: min(720px, calc(100vh - 3rem));
-            min-height: 640px;
+            height: min(690px, calc(100vh - 2rem));
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
+            padding: 1.5rem;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             box-shadow: 0 26px 70px rgba(79, 70, 229, 0.16);
             box-sizing: border-box;
           }
           .auth-form-panel {
             width: 360px;
-            min-height: 620px;
-            padding: 2.75rem 2rem 1.75rem;
+            height: 630px;
+            padding: 2.75rem 2rem 1.9rem;
             border-radius: 0.7rem;
             background: #ffffff;
             box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
@@ -1279,8 +1279,8 @@ app.get('/', (c) => {
             overflow: hidden;
           }
           .auth-brand-block {
-            height: 132px;
-            flex: 0 0 132px;
+            height: 128px;
+            flex: 0 0 128px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -1298,7 +1298,8 @@ app.get('/', (c) => {
             flex: 1 1 auto;
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.95rem;
+            min-height: 0;
           }
           .auth-form-body > :not([hidden]) ~ :not([hidden]) {
             margin-top: 0 !important;
@@ -1306,20 +1307,23 @@ app.get('/', (c) => {
           .auth-bottom-link {
             min-height: 32px;
             flex: 0 0 auto;
-            margin-top: 1rem !important;
+            margin-top: 1.25rem !important;
             display: flex;
             align-items: center;
             justify-content: center;
+            gap: 0.2rem;
             text-align: center;
+            white-space: nowrap;
             position: relative;
             z-index: 1;
           }
           .auth-form-body .auth-primary-button {
-            margin-top: auto;
+            flex: 0 0 auto;
+            margin-top: 0.25rem;
           }
           .auth-login-spacer {
-            height: 4rem;
-            flex: 0 0 4rem;
+            height: 5rem;
+            flex: 0 0 5rem;
           }
           .auth-input {
             width: 100%;
@@ -1355,19 +1359,18 @@ app.get('/', (c) => {
           }
           @media (max-width: 860px) {
             .auth-container {
-              padding: 1.5rem;
+              padding: 1rem;
             }
             .auth-shell {
               max-width: 100%;
             }
             .auth-screen {
-              height: calc(100vh - 3rem);
-              min-height: 620px;
+              height: calc(100vh - 2rem);
               padding: 1.25rem;
             }
             .auth-form-panel {
               width: min(360px, 100%);
-              min-height: 620px;
+              height: 630px;
             }
           }
           .hidden { display: none !important; }
