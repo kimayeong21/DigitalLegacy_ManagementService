@@ -6,6 +6,7 @@
     "dev:python": "cd python-api && python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000",
     "build": "vite build",
     "preview": "wrangler pages dev dist",
+    "build:pages": "npm run build && node scripts/export-static-page.mjs",
     "deploy": "npm run build && wrangler pages deploy dist --project-name memorylink",
     "deploy:prod": "npm run build && wrangler pages deploy dist --project-name memorylink",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
