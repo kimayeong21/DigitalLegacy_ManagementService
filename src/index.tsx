@@ -1269,9 +1269,9 @@ app.get('/', (c) => {
             box-sizing: border-box;
           }
           .auth-form-panel {
-            width: 360px;
-            height: 630px;
-            padding: 2.75rem 2rem 1.9rem;
+            width: 420px;
+            height: 660px;
+            padding: 3rem 2.35rem 2.1rem;
             border-radius: 0.7rem;
             background: #ffffff;
             box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
@@ -1282,8 +1282,8 @@ app.get('/', (c) => {
             overflow: hidden;
           }
           .auth-brand-block {
-            height: 128px;
-            flex: 0 0 128px;
+            height: 132px;
+            flex: 0 0 132px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -1295,13 +1295,13 @@ app.get('/', (c) => {
             flex: 0 0 34px;
             display: flex;
             align-items: center;
-            margin: 0 0 1rem;
+            margin: 0 0 1.05rem;
           }
           .auth-form-body {
             flex: 1 1 auto;
             display: flex;
             flex-direction: column;
-            gap: 0.95rem;
+            gap: 1rem;
             min-height: 0;
           }
           .auth-form-body > :not([hidden]) ~ :not([hidden]) {
@@ -1310,7 +1310,7 @@ app.get('/', (c) => {
           .auth-bottom-link {
             min-height: 32px;
             flex: 0 0 auto;
-            margin-top: 1.25rem !important;
+            margin-top: 1.35rem !important;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1322,15 +1322,15 @@ app.get('/', (c) => {
           }
           .auth-form-body .auth-primary-button {
             flex: 0 0 auto;
-            margin-top: 0.25rem;
+            margin-top: 0.35rem;
           }
           .auth-login-spacer {
-            height: 5rem;
-            flex: 0 0 5rem;
+            height: 5.5rem;
+            flex: 0 0 5.5rem;
           }
           .auth-input {
             width: 100%;
-            height: 2.85rem;
+            height: 3rem;
             border-radius: 0.45rem;
             border: 1px solid #d8e0ec;
             background: #ffffff;
@@ -1348,7 +1348,7 @@ app.get('/', (c) => {
             width: 100%;
             border: 0;
             border-radius: 0.45rem;
-            padding: 0.9rem 1rem;
+            padding: 1rem 1rem;
             color: #ffffff;
             font-weight: 800;
             cursor: pointer;
@@ -1372,8 +1372,9 @@ app.get('/', (c) => {
               padding: 1rem;
             }
             .auth-form-panel {
-              width: min(360px, 100%);
-              height: 630px;
+              width: min(420px, 100%);
+              height: min(660px, calc(100vh - 2rem));
+              padding: 2.5rem 2rem 1.9rem;
             }
           }
           .hidden { display: none !important; }
