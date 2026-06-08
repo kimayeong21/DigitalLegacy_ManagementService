@@ -1350,6 +1350,15 @@ app.get('/', (c) => {
             background: #ffffff;
             box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12);
           }
+          .auth-input[type="password"]::-ms-reveal,
+          .auth-input[type="password"]::-ms-clear {
+            display: none;
+          }
+          .auth-input[type="password"]::-webkit-credentials-auto-fill-button,
+          .auth-input[type="password"]::-webkit-textfield-decoration-container {
+            visibility: hidden;
+            pointer-events: none;
+          }
           .auth-primary-button {
             width: 100%;
             border: 0;
