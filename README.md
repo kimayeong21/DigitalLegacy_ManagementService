@@ -1,611 +1,268 @@
-# AI 기반 디지털 유품 정리 서비스 v3.6.0
+# MemoryLink: AI 기반 디지털 유품 정리 서비스
 
-> **완전히 작동하는 프로덕션 준비 버전** - 로그인, 회원가입, 추억 추가/수정/삭제, **스크린샷 붙여넣기**, 실시간 이미지 갤러리, AI 분석 통합, 향상된 FAB UI, **Python FastAPI 백엔드**, **VSCode 완벽 지원**
+## 1. 프로젝트 개요
 
-## 프로젝트 개요
+MemoryLink는 사진, 영상, 문서, SNS 기록 등 흩어진 디지털 자료를 한곳에서 관리하고 다시 돌아볼 수 있도록 만든 졸업작품입니다. 기록의 내용과 감정, 날짜, 중요도를 활용해 개인의 추억을 정리하고, 타임라인과 추억 다시보기로 과거의 순간을 탐색할 수 있습니다.
 
-**AI 기반 디지털 유품 정리 서비스**는 사용자 인증과 AI 분석을 갖춘 완전한 디지털 추억 관리 플랫폼입니다. 회원가입 후 로그인하여 개인의 소중한 추억을 안전하게 보관하고, AI가 자동으로 분석해줍니다.
+웹 서비스 소스, Python 분석 API, MySQL 스키마, Android 앱 프로젝트를 함께 관리합니다. 현재 웹 화면은 브라우저 저장을 중심으로 동작하며, 공개 체험판은 별도 계정 없이 주요 기능을 확인할 수 있습니다.
 
-## 현재 완료된 기능
+- [프로젝트 저장소](https://github.com/kimayeong21/DigitalLegacy_ManagementService)
+- [MemoryLink 체험판](https://kimayeong21.github.io/DNights.github.io/memorylink/)
+- [개발자 포트폴리오](https://kimayeong21.github.io/DNights.github.io/)
 
-### v3.5 사용성 업그레이드
-- **즐겨찾기**: 중요한 추억을 별표로 저장하고 즐겨찾기만 모아보기
-- **다양한 정렬**: 최신순, 오래된순, 중요도순, 제목순
-- **일괄 관리**: 여러 추억을 선택해 한 번에 삭제
-- **백업 복원**: 내보낸 JSON 파일을 다시 가져와 기존 자료와 병합
-- **로컬 백업 강화**: 오프라인 모드에서도 JSON 내보내기 지원
+## 2. 주요 기능
 
-### v3.6 기록 활용 업그레이드
-- **사용자 태그**: 쉼표로 최대 10개 태그 입력, 카드와 상세 화면에서 확인
-- **태그 통합 검색**: 제목·설명·내용과 함께 태그까지 한 번에 검색
-- **추억 복제**: 기존 기록을 복사한 뒤 일부만 고쳐 빠르게 새 기록 작성
-- **추억 다시보기**: 보관된 기록 중 하나를 무작위로 열어 다시 발견
+| 기능 | 설명 |
+| --- | --- |
+| 추억 관리 | 제목, 설명, 내용, 날짜, 카테고리, 중요도, 태그를 입력하고 기록을 추가·조회·수정·삭제 |
+| 이미지 등록 | 파일 선택, 드래그 앤 드롭, 클립보드 붙여넣기, 이미지 URL 입력 |
+| 검색과 필터 | 제목·설명·내용·태그 검색, 카테고리와 감정 필터, 정렬 |
+| 즐겨찾기와 복제 | 중요한 기록을 즐겨찾기로 표시하고 기존 기록을 복제하여 재사용 |
+| 일괄 관리 | 여러 기록을 선택하여 삭제 |
+| 대시보드 | 전체 기록 수, 감정별 현황, 중요도, 보관함 분포, 최근 추억 확인 |
+| 타임라인 | 기록을 연도와 월별로 탐색 |
+| 추억 다시보기 | 저장된 기록을 무작위로 열거나 날짜·감정·중요도를 바탕으로 추천 |
+| 회상 알림 | 방문 중 설정한 주기와 시간에 맞춰 회상 안내 |
+| 백업과 복원 | JSON 파일로 기록을 내보내고 백업 자료를 기존 기록과 병합 |
+| 분석 결과 표시 | 요약, 감정, 키워드, 장면, 분위기, 추억의 의미 표시 |
+| 모바일 화면 | 반응형 레이아웃과 하단 탐색 메뉴 제공 |
 
-### 사용자 인증 시스템
-- **회원가입**: 새 계정 생성 (이메일, 비밀번호, 이름)
-- **로그인**: 이메일/비밀번호 인증
-- **비밀번호 암호화**: SHA-256 해싱으로 안전한 저장
-- **세션 관리**: HttpOnly 쿠키 기반 세션 (7일 유효)
-- **사용자별 데이터 격리**: 각 사용자는 본인의 추억만 접근
-- **로그아웃**: 세션 종료 및 쿠키 삭제
+서버 코드에는 회원가입, 로그인, 로그아웃, 세션 확인과 OpenAI 분석 연동이 포함되어 있습니다. 공개 체험판에서는 서버 인증이나 실제 OpenAI 호출 대신 브라우저 저장과 로컬 예시 분석을 사용합니다. 기록은 기기 간에 자동 동기화되지 않으며, 브라우저 데이터를 삭제하면 함께 지워집니다.
 
-### 추억 관리 (완전 작동)
-- **향상된 추억 추가 UI (NEW v3.3)**:
-  - 플로팅 액션 버튼 (FAB) 메뉴
-  - 사진 추가 (빠른 버튼)
-  - 동영상 추가 (빠른 버튼)
-  - 문서 추가 (빠른 버튼)
-  - SNS 게시물 추가 (빠른 버튼)
-  - 애니메이션 효과 (회전 + 펼치기)
-  - 라벨 툴팁 (마우스 호버)
-  - 모바일 반응형
-- **추억 추가**: 모달 UI로 쉽게 추가 (제목, 설명, 내용, 이미지, 카테고리, 중요도)
-- **이미지 업로드** (NEW v3.4.4):
-  - **스크린샷 붙여넣기**: Ctrl+V로 클립보드 이미지 직접 붙여넣기
-  - **드래그 앤 드롭**: 파일을 드래그하여 업로드
-  - **파일 선택**: 클릭하여 파일 선택
-  - **URL 직접 입력**: 외부 이미지 URL 입력 (Unsplash 등)
-  - **Base64 저장**: 이미지를 데이터베이스에 직접 저장 (R2 불필요)
-- **추억 수정**: 기존 추억 편집
-- **추억 삭제**: 안전한 삭제 기능
-- **상세 보기**: 모달로 추억 전체 정보 확인
-- **이미지 갤러리**: 실제 고품질 사진 10장 포함 (Unsplash)
-- **카테고리별 분류**: 사진, 동영상, 문서, SNS 게시물, 기타
-- **검색 기능**: 제목, 설명, 내용으로 실시간 검색
-- **카테고리 필터**: 특정 카테고리만 보기
-- **페이지네이션**: 대량 데이터 효율적 처리 (12개/페이지)
+## 3. 시스템 구성
 
-### AI 자동 분석 (OpenAI 통합)
-- **요약 생성**: GPT-3.5로 추억 내용 요약
-- **감정 분석**: 긍정 / 부정 / 중립 자동 판단
-- **키워드 추출**: 중요 키워드 자동 추출
-- **선택적 분석**: 체크박스로 AI 분석 켜기/끄기
-- **설정 필요**: `.dev.vars`에 `OPENAI_API_KEY` 설정 필요
+| 구성 요소 | 역할 | 현재 구성 |
+| --- | --- | --- |
+| 웹 화면 | 기록 입력, 탐색, 통계, 회상 기능 | Hono에서 HTML을 제공하고 브라우저 JavaScript가 화면을 제어 |
+| 브라우저 저장소 | 기록과 사용자 설정 보관 | localStorage에 기록, 즐겨찾기, 회상 설정 저장 |
+| Hono API | 인증, 기록 관리, 파일, 통계 API | `src/index.tsx`에 라우트 구현 |
+| Python API | 분석과 통계 확장 | FastAPI와 aiomysql 기반의 별도 서버 |
+| MySQL | 사용자, 기록, 세션, 관계 데이터 구조 | 스키마와 초기 데이터, 설정 스크립트 제공 |
+| OpenAI | 외부 분석 요청 | 서버 환경 변수에 API 키가 설정된 경우 사용 |
+| Cloudflare R2 | 파일 업로드 확장 | `BUCKET` 바인딩을 사용하는 업로드·조회 API 포함 |
+| Android | 웹 화면의 앱 패키징 | Capacitor와 Gradle 기반 프로젝트 |
+| GitHub Pages | 공개 체험 화면 제공 | 정적으로 내보낸 HTML·CSS 배포 |
 
-### 대시보드 및 통계
-- **총 추억 개수** 표시
-- **감정별 통계**: 긍정/부정/중립 개수
-- **평균 중요도**: 1-10 점수 평균
-- **카테고리별 분포**: 각 카테고리 추억 개수
-- **최근 추억**: 최신 5개 추억 미리보기
+Hono의 데이터 접근 코드는 `DB` 바인딩을 사용하며, 바인딩이 없으면 프로세스 메모리의 대체 저장소를 사용합니다. MySQL 환경 변수를 입력하는 것만으로 Hono에 MySQL이 자동 연결되지는 않습니다. Python API에는 별도의 MySQL 연결 코드가 있습니다.
 
-### 갤러리 및 타임라인
-- **그리드 레이아웃**: 카드 형식 이미지 갤러리
-- **타임라인 뷰**: 연/월별 시간순 정렬
-- **반응형 디자인**: 모바일, 태블릿, 데스크톱 최적화
-- **호버 효과**: 카드 마우스오버 애니메이션
+현재 웹 화면은 로컬 저장 모드가 기본입니다. 서버 API의 존재와 웹 화면의 서버 영구 저장 연결은 구분해야 하며, 서버 재시작 이후에도 계정과 기록을 보존하려면 데이터베이스 연결과 화면 연동을 추가로 확인해야 합니다.
 
-### 파일 관리
-- **드래그 앤 드롭**: 파일 끌어서 업로드
-- **URL 입력**: 외부 이미지 URL 지원
-- **파일 미리보기**: 업로드 후 즉시 미리보기
-- **다양한 포맷**: 이미지 (JPG, PNG, GIF 등), 동영상 지원
+## 4. 프로젝트 구조
 
-### 데이터 관리
-- **JSON 내보내기**: 모든 추억 백업
-- **데이터베이스**: MySQL
-- **마이그레이션**: 구조화된 DB 마이그레이션
-- **시드 데이터**: 테스트용 샘플 데이터
-
----
-
-## 빠른 시작 가이드
-
-### VSCode에서 바로 실행 (권장)
-
-```bash
-# 1. VSCode로 프로젝트 열기
-code /home/user/memorylink
-
-# 2. F5 누르기
-# 3. 실행 구성 선택: "Python: FastAPI (개발 서버)"
-# 4. 완료! http://localhost:8000 에서 API 실행 중
+```text
+DigitalLegacy_ManagementService/
+|-- src/
+|   |-- index.tsx                 # Hono API, HTML, 브라우저 기능
+|   `-- renderer.tsx              # 렌더러 설정
+|-- public/static/
+|   |-- premium.css               # 최신 화면 스타일
+|   `-- style.css                 # 기본 스타일
+|-- python-api/
+|   |-- main.py                   # 분석·통계 API와 MySQL 연결
+|   |-- models.py                 # 데이터 모델
+|   |-- utils.py                  # 보조 함수
+|   |-- dev.py                    # 개발 서버 실행
+|   `-- requirements.txt          # Python 의존성
+|-- android/                      # Android 앱 소스와 Gradle 설정
+|-- migrations/
+|   |-- mysql_schema.sql          # 테이블 생성
+|   `-- mysql_ai_insights.sql     # 분석 컬럼 확장
+|-- db/                           # 스키마 설명과 SQL 참고 자료
+|-- scripts/
+|   |-- setup-mysql.mjs           # DB·초기 데이터 설정
+|   |-- build-android-web.mjs     # Android용 웹 화면 생성
+|   |-- export-pages-demo.mjs     # 브라우저 체험판 생성
+|   `-- export-static-page.mjs    # 기본 정적 HTML 생성
+|-- .vscode/                      # 편집기 실행·디버깅 설정
+|-- .dev.vars.example             # 환경 변수 예시
+|-- capacitor.config.json         # 앱 ID와 웹 출력 경로
+|-- package.json                  # 의존성과 실행 명령
+|-- seed.mysql.sql                # 초기 데이터
+|-- vite.config.ts                # 개발·빌드 설정
+`-- wrangler.jsonc                # Cloudflare 설정
 ```
 
-**자세한 VSCode 가이드**: [`VSCODE_GUIDE.md`](./VSCODE_GUIDE.md) 참고
+`dist/`, `android-web/`, `node_modules/`와 Android 빌드 결과물은 실행 또는 빌드 과정에서 생성됩니다.
 
----
+## 5. 기술 스택
 
-### 1 로컬 개발 환경 설정
+| 분야 | 사용 기술 |
+| --- | --- |
+| 화면 | HTML, CSS, JavaScript, Tailwind CSS, Font Awesome |
+| 웹 서버 | TypeScript, Hono |
+| 빌드 | Vite, Node.js |
+| Python 서버 | Python, FastAPI, Uvicorn, Pydantic |
+| 데이터베이스 | MySQL, mysql2, aiomysql |
+| 로컬 저장 | Web Storage API의 localStorage |
+| 분석 | OpenAI API, 로컬 규칙 기반 예시 분석 |
+| Android | Capacitor 8, Java, Gradle |
+| 배포 설정 | GitHub Pages, Cloudflare Pages, Wrangler, R2 |
+| 개발 도구 | Git, GitHub, Visual Studio Code, Android Studio |
+
+## 6. 데이터베이스 구조
+
+MySQL 스키마는 `migrations/mysql_schema.sql`에 정의되어 있습니다.
+
+| 테이블 | 주요 컬럼 | 역할 |
+| --- | --- | --- |
+| `users` | `id`, `email`, `password`, `name`, `avatar_url` | 사용자 계정과 프로필 |
+| `sessions` | `id`, `user_id`, `expires_at` | 로그인 세션과 만료 시간 |
+| `categories` | `id`, `name`, `icon`, `color` | 기록 분류 기준 |
+| `memories` | `id`, `user_id`, `category_id`, `title`, `description`, `content`, `file_url`, `file_type`, `tags` | 기록 본문과 첨부 자료 |
+| `connections` | `id`, `memory_id_1`, `memory_id_2`, `connection_type`, `strength` | 기록 간 관계 |
+
+`memories`에는 중요도(`importance_score`), 보관 여부(`is_archived`), 원본 날짜(`original_date`), 생성·수정 시각도 저장할 수 있습니다. 분석용 컬럼으로 `ai_summary`, `ai_sentiment`, `ai_keywords`, `ai_scene_type`, `ai_atmosphere`, `ai_felt_emotion`, `ai_image_observations`, `ai_event_story`, `ai_memory_meaning`, `ai_confidence`가 정의되어 있습니다. 컬럼 정의가 모든 실행 모드에서 해당 값을 생성하거나 저장한다는 의미는 아닙니다.
+
+사용자 한 명은 여러 세션과 기록을 가질 수 있고, 카테고리 하나에는 여러 기록이 속할 수 있습니다. `connections`는 두 기록의 ID를 참조합니다. 사용자 삭제 시 관련 세션과 기록은 함께 삭제되며, 카테고리를 삭제하면 해당 기록의 카테고리 참조는 비워집니다.
+
+즐겨찾기와 회상 설정은 현재 브라우저 저장소에서 관리합니다. 자세한 설명은 [DB 문서](./db/schema.md)를 참고하세요.
+
+## 7. 실행 방법
+
+### 웹 개발 환경
+
+Node.js와 npm이 설치된 환경에서 실행합니다.
 
 ```bash
-# 저장소 클론
-git clone https://github.com/kimayeong21/-1.git memorylink
-cd memorylink
-
-# Node.js 의존성 설치
+git clone https://github.com/kimayeong21/DigitalLegacy_ManagementService.git
+cd DigitalLegacy_ManagementService
 npm install
-
-# Python 의존성 설치 (NEW v3.4+)
-npm run python:install
-
-# 데이터베이스 마이그레이션
-npm run db:migrate:local
-
-# 초기 데이터 시드 (카테고리 + 테스트 사용자)
-npm run db:seed
-npx wrangler d1 execute memorylink-production --local --file=./seed_auth.sql
+npm run dev -- --host 127.0.0.1 --port 4174
 ```
 
-### 2 서버 실행
+브라우저에서 `http://127.0.0.1:4174`에 접속합니다. 브라우저 저장 방식의 화면을 확인할 수 있으며, MySQL 연결 없이도 로컬 기능을 체험할 수 있습니다.
 
-#### Option A: Python API만 실행
+빌드와 빌드 결과 확인 명령은 다음과 같습니다.
+
 ```bash
-# 방법 1: dev.py 사용 (권장)
-cd python-api
-python3 dev.py
-
-# 방법 2: NPM 스크립트
-npm run dev:python
-
-# 접속: http://localhost:8000
-# API 문서: http://localhost:8000/docs
-```
-
-#### Option B: Hono 서버만 실행
-```bash
-# 빌드 후 실행
 npm run build
-npm run dev:sandbox
-
-# 접속: http://localhost:3000
+npm run preview
 ```
 
-#### Option C: 풀스택 실행 (Python + Hono)
+### MySQL 초기 설정
+
+MySQL 서버를 준비한 뒤 `.dev.vars.example`을 `.dev.vars`로 복사하고 접속 정보를 입력합니다. 아래는 Windows PowerShell 예시입니다.
+
+```powershell
+Copy-Item .dev.vars.example .dev.vars
+```
+
+```dotenv
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=your_mysql_password
+MYSQL_DATABASE=memorylink
+OPENAI_MODEL=gpt-5.2
+```
+
 ```bash
-# 터미널 1: Python API
-cd python-api && python3 dev.py
-
-# 터미널 2: Hono Server
-npm run build && npm run dev:sandbox
-
-# Python API: http://localhost:8000
-# Hono Server: http://localhost:3000
+npm run db:mysql:setup
 ```
 
-### 3 테스트 계정 로그인
+설정 스크립트는 테이블과 초기 데이터를 생성하고 누락된 분석 컬럼을 보완합니다. 현재 SQL 파일의 데이터베이스 이름은 `memorylink`로 고정되어 있으므로 다른 이름을 사용하려면 SQL도 함께 수정해야 합니다. 이 작업은 Hono의 DB 연결을 자동으로 구성하지 않습니다.
 
-- **이메일**: `test@memorylink.com`
-- **비밀번호**: `password123`
+### Python API 실행
 
----
+Python 환경에서 의존성을 설치하고 Uvicorn을 실행합니다.
 
-## 추억 추가 사용 방법
-
-### 단계별 가이드
-
-1. **로그인** - 테스트 계정 또는 새 계정으로 로그인
-2. **추억 추가 버튼 클릭** - 우측 상단 "추억 추가" 버튼
-3. **정보 입력**:
-   - **제목** (필수): 예) "제주도 여행"
-   - **이미지**: URL 입력 또는 파일 드래그 앤 드롭
-   - **카테고리**: 사진, 동영상, 문서 등 선택
-   - **설명**: 간단한 설명
-   - **내용**: 자세한 내용
-   - **중요도**: 1-10 슬라이더
-   - **AI 자동 분석**: 체크박스 선택 (OpenAI API 키 필요)
-4. **저장** - "저장" 버튼 클릭
-5. **확인** - 대시보드 또는 "내 추억"에서 추가된 추억 확인
-
-### 이미지 URL 예시
-
-```
-https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800
-https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800
-https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800
+```bash
+python -m pip install -r python-api/requirements.txt
+python -m uvicorn main:app --app-dir python-api --reload --host 127.0.0.1 --port 8000 --env-file .dev.vars
 ```
 
----
+- 상태 확인: `http://127.0.0.1:8000/health`
+- API 문서: `http://127.0.0.1:8000/docs`
 
-## API 엔드포인트
+DB 관련 API에는 실행 중인 MySQL 서버가 필요합니다. 실제 분석을 사용하려면 `.dev.vars`에 `OPENAI_API_KEY`를 추가합니다. API 키와 실제 접속 비밀번호는 저장소에 올리지 않습니다.
 
-### 인증 API (Public)
+### Android 프로젝트 실행
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
+Android Studio, Android SDK와 JDK를 준비합니다. 현재 Android 설정은 compileSdk·targetSdk 36, minSdk 24입니다. 웹 개발 서버를 `http://127.0.0.1:4174`에서 실행한 상태로 별도 터미널에서 진행합니다.
+
+```bash
+npm run android:sync
+npm run android:open
+```
+
+`android:sync`는 실행 중인 웹 화면을 읽어 `android-web/`에 저장하고 Android 프로젝트에 복사합니다. 다른 주소를 사용한다면 `MEMORYLINK_DEV_URL` 환경 변수를 지정합니다. Windows에서는 SDK와 Java 설정을 마친 후 `npm run android:apk`로 디버그 APK를 빌드할 수 있습니다.
+
+### GitHub Pages 체험판 생성
+
+```bash
+npm run build
+node scripts/export-pages-demo.mjs
+```
+
+출력은 `dist/demo/`에 생성됩니다. 다른 출력 경로는 첫 번째 인수로 지정할 수 있습니다. 생성된 체험판은 정적 페이지이므로 계정 인증, 서버 저장, 실제 OpenAI 분석을 제공하지 않습니다.
+
+## 8. 화면 및 라우트 구성
+
+### 화면 구성
+
+웹 화면은 `/`에서 제공되며, 내부 화면 전환은 브라우저 JavaScript로 처리합니다. 대시보드·추억·타임라인이 각각 별도 URL로 제공되는 구조는 아닙니다.
+
+| 화면 | 주요 내용 |
+| --- | --- |
+| 가입·로그인 | 사용자 정보 입력과 로그인 화면. 공개 체험판에서는 생략 |
+| 오늘의 기억 | 추천 기록, 통계, 보관함 현황, 최근 추억, 회상 설정 |
+| 추억 | 검색, 필터, 정렬, 즐겨찾기, 선택 관리, 백업 복원 |
+| 타임라인 | 월별 기록 조회 |
+| 추가·수정 모달 | 파일, 제목, 설명, 태그, 날짜, 중요도 입력 |
+| 상세 모달 | 기록 본문과 분석 결과 확인 |
+| 모바일 탐색 | 홈, 추억, 추가, 타임라인, 다시보기 이동 |
+
+### Hono 라우트
+
+| 메서드 | 경로 | 역할 |
+| --- | --- | --- |
+| GET | `/` | 웹 화면 |
 | POST | `/api/auth/register` | 회원가입 |
 | POST | `/api/auth/login` | 로그인 |
 | POST | `/api/auth/logout` | 로그아웃 |
-| GET | `/api/auth/me` | 현재 사용자 정보 |
-
-### 추억 API (Protected - 로그인 필요)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/categories` | 카테고리 목록 (Public) |
-| GET | `/api/memories` | 추억 목록 (페이지네이션) |
-| GET | `/api/memories/:id` | 추억 상세 정보 |
-| POST | `/api/memories` | 새 추억 생성 |
-| PUT | `/api/memories/:id` | 추억 수정 |
-| DELETE | `/api/memories/:id` | 추억 삭제 |
-| GET | `/api/statistics` | 통계 정보 |
-| GET | `/api/export` | JSON 백업 |
-
-### 파일 API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/upload` | 파일 업로드 (R2) |
-| GET | `/api/files/:key` | 파일 가져오기 |
-
----
-
-## 데이터베이스 구조
-
-### users 테이블
-```sql
-id INTEGER PRIMARY KEY
-email TEXT UNIQUE NOT NULL
-password TEXT NOT NULL (SHA-256 해시)
-name TEXT NOT NULL
-avatar_url TEXT
-created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-```
-
-### sessions 테이블
-```sql
-id TEXT PRIMARY KEY (UUID)
-user_id INTEGER
-expires_at DATETIME
-created_at DATETIME
-```
-
-### memories 테이블
-```sql
-id INTEGER PRIMARY KEY
-user_id INTEGER (FK)
-category_id INTEGER (FK)
-title TEXT NOT NULL
-description TEXT
-content TEXT
-file_url TEXT
-file_type TEXT
-tags TEXT (JSON)
-ai_summary TEXT
-ai_sentiment TEXT
-ai_keywords TEXT (JSON)
-importance_score INTEGER (1-10)
-is_archived INTEGER
-original_date DATETIME
-created_at DATETIME
-updated_at DATETIME
-```
-
-### categories 테이블
-```sql
-id INTEGER PRIMARY KEY
-name TEXT NOT NULL
-icon TEXT
-color TEXT
-created_at DATETIME
-```
-
----
-
-## 환경 변수 설정
-
-### 로컬 개발 (`.dev.vars`)
-
-```env
-OPENAI_API_KEY=sk-your-openai-api-key-here
-```
-
-### 프로덕션 (Cloudflare Pages)
-
-```bash
-# OpenAI API 키 설정
-npx wrangler pages secret put OPENAI_API_KEY --project-name memorylink
-```
-
----
-
-## NPM 스크립트
-
-```bash
-# 개발
-npm run dev                    # Vite 개발 서버
-npm run dev:sandbox            # Wrangler 개발 서버 (D1 포함)
-npm run dev:d1                 # D1 데이터베이스 포함 개발 서버
-
-# 빌드 및 배포
-npm run build                  # 프로덕션 빌드
-npm run preview                # 빌드 미리보기
-npm run deploy                 # Cloudflare Pages 배포
-npm run deploy:prod            # 프로덕션 배포
-
-# 데이터베이스
-npm run db:migrate:local       # 로컬 마이그레이션 적용
-npm run db:migrate:prod        # 프로덕션 마이그레이션 적용
-npm run db:seed                # 기본 시드 데이터
-npm run db:reset               # 데이터베이스 초기화
-npm run db:console:local       # 로컬 D1 콘솔
-
-# 유틸리티
-npm run clean-port             # 포트 3000 정리
-npm test                       # 서비스 테스트
-```
-
----
-
-## 프로덕션 배포
-
-### Cloudflare Pages 배포
-
-```bash
-# 1. 데이터베이스 생성
-npx wrangler d1 create memorylink-production
-
-# 2. wrangler.jsonc에 database_id 추가
-
-# 3. 마이그레이션 적용
-npm run db:migrate:prod
-
-# 4. 배포
-npm run deploy:prod
-```
-
----
-
-## 문제 해결
-
-### 로그인 실패 시
-- 이메일/비밀번호 확인
-- 브라우저 쿠키 활성화 확인
-- 테스트 계정: `test@memorylink.com` / `password123`
-
-### 추억 저장 실패 시
-- 제목(필수 항목) 입력 확인
-- 브라우저 개발자 도구(F12) → Console 탭 확인
-- Network 탭에서 API 응답 확인
-
-### 이미지 표시 안 됨
-- URL 형식 확인 (HTTPS 권장)
-- CORS 정책 확인
-- 공개 접근 가능한 URL 사용
-
-### AI 분석 작동 안 함
-- `.dev.vars`에 `OPENAI_API_KEY` 설정 확인
-- API 키 유효성 확인
-- "AI 자동 분석" 체크박스 활성화 확인
-
----
-
-## 기술 스택
-
-### Frontend
-- **HTML5** + **CSS3** (Tailwind CDN)
-- **Vanilla JavaScript** (모던 ES6+)
-- **Axios** (HTTP 클라이언트)
-- **Font Awesome** (아이콘)
-
-### Backend
-- **Hono** (경량 웹 프레임워크)
-- **TypeScript**
-- **Cloudflare Workers** (Edge Runtime)
-
-### Database
-- **MySQL** (관계형 데이터베이스)
-
-### Storage
-- **Cloudflare R2** (Object Storage, S3 호환)
-
-### AI
-- **OpenAI GPT-3.5 Turbo** (요약, 감정, 키워드)
-
-### Deployment
-- **Cloudflare Pages** (CDN + 자동 배포)
-- **Wrangler** (CLI 도구)
-
-### Development
-- **Vite** (빌드 도구)
-- **PM2** (프로세스 관리)
-
----
-
-## 프로젝트 통계
-
-- **코드 라인 수**: ~2,000 라인 (TypeScript + SQL)
-- **파일 크기**: 빌드 후 ~107KB
-- **데이터베이스**: 5개 테이블, 15+ 인덱스
-- **API 엔드포인트**: 15+
-- **샘플 데이터**: 카테고리 7개, 추억 10개
-- **UI 컴포넌트**: FAB 메뉴, 모달, 카드, 타임라인 등
-
----
-
-### v3.3 (2026-03-12)
-- **향상된 FAB UI**: 플로팅 액션 버튼 메뉴 추가
-- 사진/동영상/문서/SNS 타입별 빠른 추가 버튼
-- 애니메이션 효과 (회전 + 펼치기)
-- 라벨 툴팁 (마우스 호버)
-- 모바일 반응형 FAB
-- 카테고리별 자동 선택 기능
-- FAB 데모 페이지 추가
-
-## 변경 이력
-
-### v3.4.4 (2026-03-17)  NEW
-- **버그 수정**: 추억 추가 기능 정상 작동
-- **스크린샷 붙여넣기**: Ctrl+V로 클립보드 이미지 직접 업로드
-- **이미지 업로드 개선**: Base64 인코딩으로 데이터베이스에 직접 저장
-- **드래그 앤 드롭**: 파일을 드래그하여 간편하게 업로드
-- **파일 크기 검증**: 최대 10MB 제한 및 안내
-- **실시간 미리보기**: 이미지 업로드 전 미리보기 제공
-- **UI 개선**: 업로드 상태에 따른 색상 피드백 (파란색/초록색/노란색)
-- **R2 의존성 제거**: 이미지 저장을 위한 외부 스토리지 불필요
-- 빌드 크기: 109.61 kB
-
-### v3.4.3 (2026-03-17)
-- **브랜딩 개선**: MemoryLink 제거, "AI 기반 디지털 유품 정리 서비스"로 통일
-- **코드베이스 정리**: 모든 파일에서 MemoryLink 레퍼런스 제거
-- **문서 업데이트**: README, 테스트 가이드, Python API 문서 전면 개편
-- 간결하고 명확한 서비스 네이밍
-
-### v3.4.2 (2026-03-17)
-- **VSCode 완벽 지원**: F5로 바로 실행 가능
-- **dev.py 추가**: 간편한 개발 서버 실행 스크립트
-- **launch.json 개선**: 4가지 디버깅 구성 + 풀스택 실행
-- **tasks.json 개선**: 포트 정리, 의존성 설치, 빌드/테스트 자동화
-- **VSCODE_GUIDE.md 추가**: 완전한 VSCode 사용 가이드
-- **실행 방법 다양화**: Python API 5가지 실행 방법 제공
-- **README 개편**: VSCode 빠른 시작 가이드 추가
-- 기술 스택: Python 3.12.11, FastAPI 0.109.0, debugpy, Uvicorn
-- 디버깅: 브레이크포인트, Step Over/Into, 변수 검사
-- VSCode 확장: Python, Pylance, Black Formatter, Thunder Client
-
-### v3.4.1 (2026-03-15)
-- Python API main.py 실행 수정
-- 4가지 실행 방법 추가 (direct, shell, PM2, NPM)
-- 시작 배너 및 URL 표시
-- 자동 새로고침 활성화
-- 로그 레벨 설정
-
-### v3.4 (2026-03-13)
-- Python FastAPI 백엔드 추가
-- AI 분석 API (감정, 키워드, 요약)
-- 고급 통계 API
-- 일괄 분석 기능
-- VSCode 통합 (.vscode 설정)
-
-### v3.3 (2026-03-12)
-- FAB UI 개선 (플로팅 액션 버튼 메뉴)
-- 빠른 추가 버튼 (사진/동영상/문서/SNS)
-- 애니메이션 효과 및 툴팁
-- 모바일 반응형 FAB
-- 카테고리 자동 선택
-- FAB 데모 페이지
-
-### v3.2 (2026-03-10)
-- 추억 추가 기능 완전 작동 확인
-- URL 입력 및 파일 드래그 앤 드롭 지원
-- 테스트 가이드 문서 추가
-- README 전면 개편
-
-### v3.1 (2026-03-09)
-- 비밀번호 해시 수정 (SHA-256)
-- 로그인/회원가입 기능 검증
-- 추억 추가/수정/삭제 테스트 완료
-
-### v3.0 (2025-12-13)
-- 사용자 인증 시스템 추가
-- 실제 사진 10장 통합
-- OpenAI AI 분석 통합
-- 대시보드 및 통계
-- 갤러리 및 타임라인 뷰
-
-### v2.0
-- 파일 업로드 (R2)
-- 데이터 내보내기
-- 반응형 UI
-
-### v1.0
-- 초기 프로젝트 구조
-- D1 데이터베이스 설정
-- 기본 API 구현
-
----
-
-## 라이선스
-
-MIT License
-
----
-
-## 개발자
-
-- **프로젝트**: AI 기반 디지털 유품 정리 서비스
-- **버전**: v3.4.3
-- **GitHub**: https://github.com/kimayeong21/-1
-- **테크**: Hono + Cloudflare Workers/Pages + D1 + R2 + OpenAI
-
----
-
-## 감사의 말
-
-- [Hono](https://hono.dev/) - 빠르고 경량인 웹 프레임워크
-- [Cloudflare](https://cloudflare.com/) - 엣지 컴퓨팅 플랫폼
-- [Unsplash](https://unsplash.com/) - 고품질 무료 이미지
-- [OpenAI](https://openai.com/) - AI 분석 API
-- [Tailwind CSS](https://tailwindcss.com/) - 유틸리티 CSS 프레임워크
-
----
-
-## 문의
-
-프로젝트에 대한 질문이나 제안사항이 있으시면 GitHub Issues를 통해 연락해주세요!
-
-**AI 기반 디지털 유품 정리 서비스** - 소중한 추억을 영원히 간직하세요
-tps://openai.com/) - AI 분석 API
-- [Tailwind CSS](https://tailwindcss.com/) - 유틸리티 CSS 프레임워크
-
----
-
-## 문의
-
-프로젝트에 대한 질문이나 제안사항이 있으시면 GitHub Issues를 통해 연락해주세요!
-
-**AI 기반 디지털 유품 정리 서비스** - 소중한 추억을 영원히 간직하세요
-
-## Python FastAPI 백엔드 (NEW v3.4)
-
-### 주요 기능
-- **FastAPI 서버**: 고성능 비동기 Python 백엔드
-- **AI 분석 API**: 감정 분석, 키워드 추출, 요약 생성
-- **고급 통계**: 월별 추세, 카테고리 분포, 감정 분석
-- **일괄 처리**: 여러 추억 동시 분석
-- **데이터베이스 통합**: MySQL 기반 데이터 접근
-
-### API 엔드포인트 (포트 8000)
-```
-GET  /health                      # 헬스 체크
-POST /api/ai/analyze              # AI 텍스트 분석
-GET  /api/memories                # 추억 목록 조회
-GET  /api/stats/advanced          # 고급 통계
-POST /api/memories/batch-analyze  # 일괄 분석
-```
-
-### 빠른 시작
-```bash
-# Python 의존성 설치
-npm run python:install
-
-# Python API 서버 시작
-npm run dev:python
-
-# 헬스 체크
-npm run test:python
-```
-
-## VSCode 통합 개발 환경
-
-### 설치된 설정
-- **launch.json**: Python FastAPI 디버깅 설정
-- **tasks.json**: 빌드, 테스트, 서버 시작 태스크
-- **settings.json**: Python/TypeScript 포매터 설정
-- **extensions.json**: 권장 확장 프로그램
-
-### VSCode에서 실행하기
-
-1. **VSCode 열기**
-   ```bash
-   code /home/user/memorylink
-   ```
-
-2. **디버그 실행**
-   - `F5` 또는 Run > Start Debugging
-   - "Python: FastAPI" 선택 → Python API 디버깅
-   - "Node: Hono Dev Server" 선택 → Hono 서버 디버깅
-   - "Full Stack (Python + Hono)" 선택 → 동시 실행
-
-3. **터미널 작업**
-   - `Ctrl+Shift+B` → Build Task 실행
-   - Terminal > Run Task → 다양한 작업 선택
-
-### 권장 확장 프로그램
-- Python (ms-python.python)
-- Pylance (ms-python.vscode-pylance)
-- Black Formatter (ms-python.black-formatter)
-- ESLint (dbaeumer.vscode-eslint)
-- Prettier (esbenp.prettier-vscode)
-- Thunder Client (rangav.vscode-thunder-client)
-
+| GET | `/api/auth/me` | 현재 사용자 확인 |
+| GET | `/api/categories` | 카테고리 목록 |
+| GET, POST | `/api/memories` | 기록 목록 조회·생성 |
+| GET, PUT, DELETE | `/api/memories/:id` | 기록 상세 조회·수정·삭제 |
+| POST | `/api/upload` | R2 파일 업로드 |
+| GET | `/api/files/*` | R2 파일 조회 |
+| GET | `/api/statistics` | 기록 통계 |
+| POST | `/api/connections` | 기록 간 관계 생성 |
+| GET | `/api/export` | 기록 JSON 내보내기 |
+
+### Python 라우트
+
+Python API는 Hono와 별도 프로세스에서 실행합니다.
+
+| 메서드 | 경로 | 역할 |
+| --- | --- | --- |
+| GET | `/` | API 안내 |
+| GET | `/health` | 상태 확인 |
+| GET | `/docs` | Swagger API 문서 |
+| POST | `/api/ai/analyze` | 분석 요청 |
+| GET | `/api/memories` | MySQL 기록 조회 |
+| GET | `/api/stats/advanced` | 확장 통계 |
+| POST | `/api/memories/batch-analyze` | 기록 일괄 분석 |
+
+## 9. 업그레이드 구성
+
+| 구분 | 반영 내용 |
+| --- | --- |
+| 기록 활용 | 즐겨찾기, 정렬, 선택 삭제, 사용자 태그 검색, 복제 |
+| 회상 경험 | 오늘의 기억 추천, 타임라인, 무작위 다시보기, 방문 중 회상 안내 |
+| 데이터 관리 | JSON 내보내기, 백업 병합 복원, 브라우저 저장 |
+| 화면 개선 | 최신 스타일, 보관함 현황, 모바일 하단 메뉴 |
+| 앱 확장 | Capacitor Android 프로젝트와 웹 화면 동기화 스크립트 |
+| 공개 체험 | GitHub Pages용 체험판 내보내기와 포트폴리오 연결 |
+| 문서 정리 | 프로젝트 구성, 실행 절차, 데이터 구조와 라우트 설명 정리 |
+
+후속 개발 항목은 Hono와 MySQL의 영구 저장 연결, 사용자별 브라우저 데이터 분리, 서버와 브라우저의 동기화, 배포 환경의 실제 AI 분석 연결, 비밀번호 해시 방식 보완, Android 실기기 검증입니다. 회상 알림은 현재 사이트 방문 중 동작하며, 앱을 닫은 상태의 예약 알림은 별도 구현이 필요합니다.
+
+## 10. 개발자
+
+- 이름: 김아영
+- 소속: 서원대학교 컴퓨터공학과
+- 프로젝트: MemoryLink — AI 기반 디지털 유품 정리 서비스
+- GitHub: [kimayeong21](https://github.com/kimayeong21)
+- 포트폴리오: [Ayeong Kim Portfolio](https://kimayeong21.github.io/DNights.github.io/)
+- 이메일: [cngot0000@naver.com](mailto:cngot0000@naver.com)
