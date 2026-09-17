@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MemoryLink</string>
+    <string name="title_activity_main">MemoryLink</string>
+    <string name="package_name">kr.memorylink.app</string>
+    <string name="custom_url_scheme">kr.memorylink.app</string>
+</resources>

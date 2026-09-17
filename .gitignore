@@ -15,6 +15,10 @@ pip-delete-this-directory.txt
 htmlcov/
 *.egg-info/
 dist/
+android-web/
+.android-sdk/
+.jdk21/
+.tmp/
 build/
 
 # Node
@@ -28,7 +32,11 @@ dist/
 .dev.vars
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
@@ -49,3 +57,12 @@ lerna-debug.log*
 
 # Database
 *.db
+
+# Local tooling and packaged build outputs
+.wrangler-config/
+*.apk
+*.zip
+*.jks
+*.keystore
+.env.*
+!.env.example

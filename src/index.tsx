@@ -1,17 +1,15 @@
-import { Hono } from 'hono'
+﻿import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { setCookie, getCookie, deleteCookie } from 'hono/cookie'
 
 type Bindings = {
+  DB: MySQLDatabase;
   BUCKET: R2Bucket;
   OPENAI_API_KEY: string;
   OPENAI_MODEL?: string;
-  MYSQL_HOST: string;
-  MYSQL_PORT?: string;
-  MYSQL_USER: string;
-  MYSQL_PASSWORD: string;
-  MYSQL_DATABASE: string;
 }
+
+type MySQLDatabase = D1Database;
 
 type Variables = {
   user: any;
@@ -21,82 +19,241 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 
 // ==================== Helper Functions ====================
 
-type MySQLPool = {
-  execute: (sql: string, params?: any[]) => Promise<[any, any]>;
+const LOCAL_CATEGORIES = [
+  { id: 1, name: '사진', icon: '📷', color: '#3B82F6' },
+  { id: 2, name: '동영상', icon: '🎥', color: '#8B5CF6' },
+  { id: 3, name: '문서', icon: '📄', color: '#10B981' },
+  { id: 4, name: 'SNS 게시물', icon: '💬', color: '#F59E0B' },
+  { id: 5, name: '이메일', icon: '📧', color: '#EF4444' },
+  { id: 6, name: '음성/통화', icon: '🎙️', color: '#EC4899' },
+  { id: 7, name: '기타', icon: '📦', color: '#6B7280' }
+]
+
+type LocalUser = {
+  id: number;
+  email: string;
+  password: string;
+  name: string;
+  avatar_url: string;
 }
 
-let mysqlPoolPromise: Promise<MySQLPool> | null = null
-
-function getEnvValue(env: Bindings, key: keyof Bindings, fallback = ''): string {
-  const processEnv = (globalThis as any).process?.env || {}
-  return String(env[key] || processEnv[key] || fallback)
+type LocalSession = {
+  id: string;
+  user_id: number;
+  expires_at: string;
 }
 
-async function getMySQLPool(env: Bindings): Promise<MySQLPool> {
-  if (!mysqlPoolPromise) {
-    mysqlPoolPromise = import('mysql2/promise').then((mysql) => mysql.createPool({
-      host: getEnvValue(env, 'MYSQL_HOST', '127.0.0.1'),
-      port: Number(getEnvValue(env, 'MYSQL_PORT', '3306')),
-      user: getEnvValue(env, 'MYSQL_USER', 'root'),
-      password: getEnvValue(env, 'MYSQL_PASSWORD', ''),
-      database: getEnvValue(env, 'MYSQL_DATABASE', 'memorylink'),
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
-    }) as MySQLPool)
-  }
-
-  return mysqlPoolPromise
+type LocalMemory = {
+  id: number;
+  user_id: number;
+  category_id?: number | null;
+  title: string;
+  description?: string | null;
+  content?: string | null;
+  file_url?: string | null;
+  file_type?: string | null;
+  tags?: string | null;
+  ai_summary?: string | null;
+  ai_sentiment?: string | null;
+  ai_keywords?: string | null;
+  importance_score?: number;
+  original_date?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-function normalizeMySQLQuery(sql: string): string {
-  return sql
-    .replace(/datetime\('now'\)/gi, 'NOW()')
-    .replace(/INSERT\s+OR\s+IGNORE/gi, 'INSERT IGNORE')
+const localDbState: {
+  users: LocalUser[];
+  sessions: LocalSession[];
+  memories: LocalMemory[];
+  nextUserId: number;
+  nextMemoryId: number;
+} = {
+  users: [],
+  sessions: [],
+  memories: [],
+  nextUserId: 1,
+  nextMemoryId: 1
 }
 
-class MySQLPreparedStatement {
-  private params: any[] = []
+function withCategory(memory: LocalMemory) {
+  const category = LOCAL_CATEGORIES.find((item) => item.id === Number(memory.category_id))
+  return {
+    ...memory,
+    category_name: category?.name || '미분류',
+    category_icon: category?.icon || '📦',
+    category_color: category?.color || '#6B7280'
+  }
+}
 
-  constructor(private pool: MySQLPool, private sql: string) {}
+function createLocalResult(sql: string, params: any[]) {
+  const normalizedSql = sql.replace(/\s+/g, ' ').trim().toLowerCase()
 
-  bind(...params: any[]) {
-    this.params = params
-    return this
+  if (normalizedSql.startsWith('select id from users where email')) {
+    return localDbState.users.find((user) => user.email === params[0]) || null
   }
 
-  async all() {
-    const [rows] = await this.pool.execute(normalizeMySQLQuery(this.sql), this.params)
-    return { results: Array.isArray(rows) ? rows : [] }
+  if (normalizedSql.startsWith('select id, email, name, avatar_url, password from users')) {
+    return localDbState.users.find((user) => user.email === params[0] && user.password === params[1]) || null
   }
 
-  async first() {
-    const result = await this.all()
-    return result.results[0] || null
+  if (normalizedSql.includes('from sessions s join users u')) {
+    const session = localDbState.sessions.find((item) => item.id === params[0] && new Date(item.expires_at) > new Date())
+    const user = session ? localDbState.users.find((item) => item.id === session.user_id) : null
+    return session && user ? { ...session, email: user.email, name: user.name, avatar_url: user.avatar_url } : null
   }
 
-  async run() {
-    const [result] = await this.pool.execute(normalizeMySQLQuery(this.sql), this.params)
-    return {
-      success: true,
-      meta: {
-        last_row_id: result?.insertId || 0,
-        changes: result?.affectedRows || 0
-      }
+  if (normalizedSql.startsWith('select * from categories')) {
+    return [...LOCAL_CATEGORIES].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }
+
+  if (normalizedSql.startsWith('select count(*) as total from memories')) {
+    const userId = Number(params[0])
+    return { total: localDbState.memories.filter((memory) => memory.user_id === userId).length }
+  }
+
+  if (normalizedSql.startsWith('select count(*) as count from memories')) {
+    const userId = Number(params[0])
+    return { count: localDbState.memories.filter((memory) => memory.user_id === userId).length }
+  }
+
+  if (normalizedSql.includes('from categories c left join memories m')) {
+    const userId = Number(params[0])
+    return LOCAL_CATEGORIES.map((category) => ({
+      ...category,
+      count: localDbState.memories.filter((memory) => memory.user_id === userId && Number(memory.category_id) === category.id).length
+    })).sort((a, b) => b.count - a.count)
+  }
+
+  if (normalizedSql.includes('select ai_sentiment, count(*) as count')) {
+    const userId = Number(params[0])
+    const counts = new Map<string, number>()
+    localDbState.memories
+      .filter((memory) => memory.user_id === userId && memory.ai_sentiment)
+      .forEach((memory) => counts.set(String(memory.ai_sentiment), (counts.get(String(memory.ai_sentiment)) || 0) + 1))
+    return Array.from(counts.entries()).map(([ai_sentiment, count]) => ({ ai_sentiment, count }))
+  }
+
+  if (normalizedSql.startsWith('select m.*, c.name as category_name')) {
+    const numericParams = params.map((value) => Number(value))
+    const userId = numericParams.find((value) => Number.isFinite(value) && localDbState.users.some((user) => user.id === value))
+    const id = normalizedSql.includes('where m.id = ?') ? Number(params[0]) : null
+    let memories = localDbState.memories.filter((memory) => !userId || memory.user_id === userId)
+    if (id) memories = memories.filter((memory) => memory.id === id)
+    if (normalizedSql.includes('order by m.created_at desc')) {
+      memories = memories.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     }
+    return memories.map(withCategory)
   }
+
+  if (normalizedSql.startsWith('select * from memories where id')) {
+    return localDbState.memories.find((memory) => memory.id === Number(params[0])) || null
+  }
+
+  if (normalizedSql.startsWith('select user_id from memories where id')) {
+    const memory = localDbState.memories.find((item) => item.id === Number(params[0]))
+    return memory ? { user_id: memory.user_id } : null
+  }
+
+  if (normalizedSql.startsWith('select * from memories where user_id')) {
+    const userId = Number(params[0])
+    return localDbState.memories
+      .filter((memory) => memory.user_id === userId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }
+
+  if (normalizedSql.includes('from connections')) {
+    return []
+  }
+
+  return null
 }
 
-class MySQLDatabase {
-  constructor(private pool: MySQLPool) {}
+function createLocalDatabase(): D1Database {
+  return {
+    prepare(sql: string) {
+      let params: any[] = []
 
-  prepare(sql: string) {
-    return new MySQLPreparedStatement(this.pool, sql)
-  }
+      return {
+        bind(...values: any[]) {
+          params = values
+          return this
+        },
+        async first() {
+          const result = createLocalResult(sql, params)
+          return Array.isArray(result) ? (result[0] || null) : result
+        },
+        async all() {
+          const result = createLocalResult(sql, params)
+          return { results: Array.isArray(result) ? result : result ? [result] : [] }
+        },
+        async run() {
+          const normalizedSql = sql.replace(/\s+/g, ' ').trim().toLowerCase()
+
+          if (normalizedSql.startsWith('insert into users')) {
+            const id = localDbState.nextUserId++
+            localDbState.users.push({
+              id,
+              email: params[0],
+              password: params[1],
+              name: params[2],
+              avatar_url: params[3]
+            })
+            return { meta: { last_row_id: id } }
+          }
+
+          if (normalizedSql.startsWith('insert into sessions')) {
+            localDbState.sessions = localDbState.sessions.filter((session) => session.id !== params[0])
+            localDbState.sessions.push({ id: params[0], user_id: Number(params[1]), expires_at: params[2] })
+            return { meta: { last_row_id: 0 } }
+          }
+
+          if (normalizedSql.startsWith('delete from sessions')) {
+            localDbState.sessions = localDbState.sessions.filter((session) => session.id !== params[0])
+            return { meta: { last_row_id: 0 } }
+          }
+
+          if (normalizedSql.startsWith('insert into memories')) {
+            const id = localDbState.nextMemoryId++
+            const now = new Date().toISOString()
+            localDbState.memories.unshift({
+              id,
+              user_id: Number(params[0]),
+              category_id: params[1] ? Number(params[1]) : null,
+              title: params[2],
+              description: params[3],
+              content: params[4],
+              file_url: params[5],
+              file_type: params[6],
+              tags: params[7],
+              ai_summary: params[8],
+              ai_sentiment: params[9],
+              ai_keywords: params[10],
+              importance_score: Number(params[11]) || 5,
+              original_date: params[12],
+              created_at: now,
+              updated_at: now
+            })
+            return { meta: { last_row_id: id } }
+          }
+
+          if (normalizedSql.startsWith('delete from memories')) {
+            localDbState.memories = localDbState.memories.filter((memory) => memory.id !== Number(params[0]))
+            return { meta: { last_row_id: 0 } }
+          }
+
+          return { meta: { last_row_id: 0 } }
+        }
+      }
+    },
+    batch: async () => [],
+    dump: async () => new ArrayBuffer(0),
+    exec: async () => ({ count: 0, duration: 0 })
+  } as unknown as D1Database
 }
 
-async function getDatabase(env: Bindings): Promise<MySQLDatabase> {
-  return new MySQLDatabase(await getMySQLPool(env))
+async function getDatabase(env?: Partial<Bindings>): Promise<MySQLDatabase> {
+  return (env?.DB || createLocalDatabase()) as MySQLDatabase
 }
 
 // Simple password hashing using Web Crypto API
@@ -164,7 +321,6 @@ type MemoryAnalysis = {
   atmosphere: string;
   felt_emotion: string;
   image_observations: string;
-  event_story: string;
 }
 
 type MemoryAnalysisContext = {
@@ -185,8 +341,7 @@ const memoryAnalysisSchema = {
     'scene_type',
     'atmosphere',
     'felt_emotion',
-    'image_observations',
-    'event_story'
+    'image_observations'
   ],
   properties: {
     summary: {
@@ -232,15 +387,11 @@ const memoryAnalysisSchema = {
     },
     felt_emotion: {
       type: 'string',
-      description: '사용자가 느꼈을 법한 구체적인 기분. 예: 뿌듯함, 설렘, 편안함, 아쉬움'
+      description: '사용자가 느꼈을 법한 핵심 감정을 구체적으로 분류. 예: 편안함, 설렘, 행복, 사랑, 그리움, 기분 나쁨, 불쾌함, 화남, 실망, 걱정, 두려움'
     },
     image_observations: {
       type: 'string',
       description: '이미지가 있으면 보이는 요소를 근거 중심으로 설명하고, 이미지가 없으면 설명문 기준으로 추정'
-    },
-    event_story: {
-      type: 'string',
-      description: '이미지와 설명을 종합해 그때 어떤 일이 있었는지 추정하되, 확실하지 않은 내용은 추정이라고 표현'
     }
   }
 }
@@ -264,7 +415,7 @@ function createLocalMemoryAnalysis(text: string, context: MemoryAnalysisContext 
   const cleanText = text.replace(/\s+/g, ' ').trim()
   const lowerText = cleanText.toLowerCase()
   const positiveWords = ['행복', '기쁨', '사랑', '즐거', '감사', '소중', '웃음', '좋', '최고', '따뜻', '설렘']
-  const negativeWords = ['슬픔', '아픔', '힘들', '그립', '외로', '걱정', '후회', '눈물', '상실', '미안']
+  const negativeWords = ['슬픔', '아픔', '힘들', '그립', '외로', '걱정', '후회', '눈물', '상실', '미안', '기분 나쁘', '기분이 나빴', '불쾌', '불편', '속상', '짜증', '화남', '화가', '분노', '실망', '싫', '무서', '두려']
   const positiveScore = positiveWords.filter((word) => lowerText.includes(word)).length
   const negativeScore = negativeWords.filter((word) => lowerText.includes(word)).length
   const sentiment: MemoryAnalysis['sentiment'] =
@@ -285,9 +436,15 @@ function createLocalMemoryAnalysis(text: string, context: MemoryAnalysisContext 
     sentiment === 'negative' ? '차분하고 그리움이 느껴지는 분위기' :
     hasImage ? '잔잔하고 자연스러운 분위기' : '담백하게 정리된 분위기'
   const feltEmotion =
+    lowerText.includes('기분 나쁘') || lowerText.includes('기분이 나빴') || lowerText.includes('불쾌') || lowerText.includes('싫') ? '기분 나쁨과 불쾌함' :
+    lowerText.includes('불편') || lowerText.includes('속상') ? '불편함과 속상함' :
+    lowerText.includes('짜증') || lowerText.includes('화남') || lowerText.includes('화가') || lowerText.includes('분노') ? '화남과 답답함' :
+    lowerText.includes('실망') || lowerText.includes('후회') ? '실망과 아쉬움' :
+    lowerText.includes('무서') || lowerText.includes('두려') || lowerText.includes('걱정') ? '걱정과 두려움' :
+    lowerText.includes('설렘') ? '기분 좋은 설렘' :
+    lowerText.includes('편안') || lowerText.includes('차분') ? '편안함과 차분함' :
     sentiment === 'positive' ? '소중함과 기분 좋은 설렘' :
-    sentiment === 'negative' ? '그리움과 아쉬움' :
-    '편안함과 차분함'
+    sentiment === 'negative' ? '그리움과 아쉬움' : '편안함과 차분함'
 
   return {
     summary,
@@ -301,10 +458,7 @@ function createLocalMemoryAnalysis(text: string, context: MemoryAnalysisContext 
     felt_emotion: feltEmotion,
     image_observations: hasImage
       ? '이미지와 사용자가 입력한 설명을 함께 기준으로 장면과 분위기를 추정했습니다.'
-      : '이미지는 없지만 제목과 설명문을 기준으로 장면과 감정을 추정했습니다.',
-    event_story: hasImage
-      ? '이미지와 설명을 함께 보면 특정 순간을 남기고 그 분위기를 기억하기 위해 저장한 기록으로 판단됩니다.'
-      : '제목과 설명문을 바탕으로 사용자가 그날의 상황과 느낀 감정을 다시 확인하기 위해 정리한 기록으로 판단됩니다.'
+      : '이미지는 없지만 제목과 설명문을 기준으로 장면과 감정을 추정했습니다.'
   }
 }
 
@@ -333,8 +487,7 @@ function normalizeAnalysis(value: any, originalText: string, context: MemoryAnal
     scene_type: String(value?.scene_type || fallback.scene_type).slice(0, 120),
     atmosphere: String(value?.atmosphere || fallback.atmosphere).slice(0, 120),
     felt_emotion: String(value?.felt_emotion || fallback.felt_emotion).slice(0, 120),
-    image_observations: String(value?.image_observations || fallback.image_observations).slice(0, 220),
-    event_story: String(value?.event_story || fallback.event_story).slice(0, 260)
+    image_observations: String(value?.image_observations || fallback.image_observations).slice(0, 220)
   }
 }
 
@@ -378,7 +531,6 @@ async function analyzeWithAI(
         text: [
           '다음 추억 기록을 분석해 주세요.',
           '이미지가 있으면 이미지의 구도, 보이는 대상, 색감, 표정/분위기를 근거로 장면을 판별해 주세요.',
-          '설명문이 짧아도 이미지와 설명을 함께 보고 어떤 상황이었는지, 어떤 감정이 느껴지는지 스스로 판단해 주세요.',
           '이미지나 설명만으로 확정할 수 없는 내용은 단정하지 말고 추정이라고 표현해 주세요.',
           '',
           text
@@ -405,7 +557,6 @@ async function analyzeWithAI(
           '당신은 AI 기반 추억 관리 서비스의 분석 엔진입니다.',
           '사용자가 저장한 이미지, 사진 설명, 문서 내용, SNS 기록을 한국어로 분석합니다.',
           '장면 판별, 전체 분위기, 사용자가 느꼈을 법한 기분, 추억의 의미를 근거 중심으로 정리합니다.',
-          '이미지와 설명이 함께 들어오면 두 정보를 종합해 그때 어떤 일이 있었는지 event_story에 자연스럽게 설명합니다.',
           '고인이나 가족 관계를 단정하지 말고, 입력에 드러난 정보만 근거로 차분하게 표현합니다.',
           '개인정보, 비밀번호, 연락처 같은 민감정보는 키워드로 뽑지 않습니다.'
         ].join('\n'),
@@ -750,31 +901,6 @@ app.get('/api/files/*', async (c) => {
   }
 })
 
-// Analyze a memory draft with AI before saving or while running in local fallback mode.
-app.post('/api/ai/analyze', async (c) => {
-  const { OPENAI_API_KEY, OPENAI_MODEL } = c.env
-  const body = await c.req.json()
-  const {
-    title = '',
-    description = '',
-    content = '',
-    file_url = null,
-    file_type = null
-  } = body
-
-  const textToAnalyze = `${title}. ${description}. ${content}`.trim()
-  if (!textToAnalyze.replace(/[.\s]/g, '')) {
-    return c.json({ error: '분석할 제목이나 설명을 입력해주세요' }, 400)
-  }
-
-  const analysis = await analyzeWithAI(textToAnalyze, OPENAI_API_KEY, OPENAI_MODEL || 'gpt-5.2', {
-    imageUrl: file_url,
-    fileType: file_type
-  })
-
-  return c.json(analysis)
-})
-
 // Create new memory with AI analysis (protected)
 app.post('/api/memories', authMiddleware, async (c) => {
   const DB = await getDatabase(c.env)
@@ -802,39 +928,21 @@ app.post('/api/memories', authMiddleware, async (c) => {
   let ai_summary = null
   let ai_sentiment = null
   let ai_keywords = null
-  let ai_scene_type = null
-  let ai_atmosphere = null
-  let ai_felt_emotion = null
-  let ai_image_observations = null
-  let ai_event_story = null
-  let ai_memory_meaning = null
-  let ai_confidence = null
 
   if (auto_analyze && (description || content)) {
     const textToAnalyze = `${title}. ${description || ''}. ${content || ''}`
-    const analysis = await analyzeWithAI(textToAnalyze, OPENAI_API_KEY, OPENAI_MODEL || 'gpt-5.2', {
-      imageUrl: file_url,
-      fileType: file_type
-    })
+    const analysis = await analyzeWithAI(textToAnalyze, OPENAI_API_KEY, OPENAI_MODEL || 'gpt-5.2')
     ai_summary = analysis.summary
     ai_sentiment = analysis.sentiment
     ai_keywords = JSON.stringify(uniqueList([...analysis.keywords, ...analysis.recommended_tags], 8))
-    ai_scene_type = analysis.scene_type
-    ai_atmosphere = analysis.atmosphere
-    ai_felt_emotion = analysis.felt_emotion
-    ai_image_observations = analysis.image_observations
-    ai_event_story = analysis.event_story
-    ai_memory_meaning = analysis.memory_meaning
-    ai_confidence = analysis.confidence
   }
 
   const result = await DB.prepare(`
     INSERT INTO memories (
       user_id, category_id, title, description, content,
       file_url, file_type, tags, ai_summary, ai_sentiment, ai_keywords,
-      ai_scene_type, ai_atmosphere, ai_felt_emotion, ai_image_observations,
-      ai_event_story, ai_memory_meaning, ai_confidence, importance_score, original_date
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      importance_score, original_date
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     user.id,
     category_id || null,
@@ -847,13 +955,6 @@ app.post('/api/memories', authMiddleware, async (c) => {
     ai_summary,
     ai_sentiment,
     ai_keywords,
-    ai_scene_type,
-    ai_atmosphere,
-    ai_felt_emotion,
-    ai_image_observations,
-    ai_event_story,
-    ai_memory_meaning,
-    ai_confidence,
     importance_score,
     original_date || null
   ).run()
@@ -873,7 +974,7 @@ app.put('/api/memories/:id', authMiddleware, async (c) => {
   const body = await c.req.json()
 
   // Check ownership
-  const existing = await DB.prepare('SELECT * FROM memories WHERE id = ?').bind(id).first()
+  const existing = await DB.prepare('SELECT user_id FROM memories WHERE id = ?').bind(id).first()
   if (!existing || existing.user_id !== user.id) {
     return c.json({ error: 'Unauthorized' }, 403)
   }
@@ -889,55 +990,13 @@ app.put('/api/memories/:id', authMiddleware, async (c) => {
     ai_summary,
     ai_sentiment,
     ai_keywords,
-    ai_scene_type,
-    ai_atmosphere,
-    ai_felt_emotion,
-    ai_image_observations,
-    ai_event_story,
-    ai_memory_meaning,
-    ai_confidence,
     importance_score,
     is_archived,
-    original_date,
-    auto_analyze
+    original_date
   } = body
 
   const updates: string[] = []
   const params: any[] = []
-
-  if (auto_analyze) {
-    const nextTitle = title !== undefined ? title : existing.title
-    const nextDescription = description !== undefined ? description : existing.description
-    const nextContent = content !== undefined ? content : existing.content
-    const nextFileUrl = file_url !== undefined ? file_url : existing.file_url
-    const nextFileType = file_type !== undefined ? file_type : existing.file_type
-    const textToAnalyze = `${nextTitle || ''}. ${nextDescription || ''}. ${nextContent || ''}`
-    const analysis = await analyzeWithAI(textToAnalyze, c.env.OPENAI_API_KEY, c.env.OPENAI_MODEL || 'gpt-5.2', {
-      imageUrl: nextFileUrl,
-      fileType: nextFileType
-    })
-
-    updates.push('ai_summary = ?')
-    params.push(analysis.summary)
-    updates.push('ai_sentiment = ?')
-    params.push(analysis.sentiment)
-    updates.push('ai_keywords = ?')
-    params.push(JSON.stringify(uniqueList([...analysis.keywords, ...analysis.recommended_tags], 8)))
-    updates.push('ai_scene_type = ?')
-    params.push(analysis.scene_type)
-    updates.push('ai_atmosphere = ?')
-    params.push(analysis.atmosphere)
-    updates.push('ai_felt_emotion = ?')
-    params.push(analysis.felt_emotion)
-    updates.push('ai_image_observations = ?')
-    params.push(analysis.image_observations)
-    updates.push('ai_event_story = ?')
-    params.push(analysis.event_story)
-    updates.push('ai_memory_meaning = ?')
-    params.push(analysis.memory_meaning)
-    updates.push('ai_confidence = ?')
-    params.push(analysis.confidence)
-  }
 
   if (category_id !== undefined) {
     updates.push('category_id = ?')
@@ -978,34 +1037,6 @@ app.put('/api/memories/:id', authMiddleware, async (c) => {
   if (ai_keywords !== undefined) {
     updates.push('ai_keywords = ?')
     params.push(JSON.stringify(ai_keywords))
-  }
-  if (ai_scene_type !== undefined) {
-    updates.push('ai_scene_type = ?')
-    params.push(ai_scene_type)
-  }
-  if (ai_atmosphere !== undefined) {
-    updates.push('ai_atmosphere = ?')
-    params.push(ai_atmosphere)
-  }
-  if (ai_felt_emotion !== undefined) {
-    updates.push('ai_felt_emotion = ?')
-    params.push(ai_felt_emotion)
-  }
-  if (ai_image_observations !== undefined) {
-    updates.push('ai_image_observations = ?')
-    params.push(ai_image_observations)
-  }
-  if (ai_event_story !== undefined) {
-    updates.push('ai_event_story = ?')
-    params.push(ai_event_story)
-  }
-  if (ai_memory_meaning !== undefined) {
-    updates.push('ai_memory_meaning = ?')
-    params.push(ai_memory_meaning)
-  }
-  if (ai_confidence !== undefined) {
-    updates.push('ai_confidence = ?')
-    params.push(ai_confidence)
   }
   if (importance_score !== undefined) {
     updates.push('importance_score = ?')
@@ -1089,11 +1120,20 @@ app.get('/api/statistics', authMiddleware, async (c) => {
     GROUP BY ai_sentiment
   `).bind(user.id).all()
 
+  const importanceStats = await DB.prepare(`
+    SELECT importance_score as score, COUNT(*) as count
+    FROM memories
+    WHERE user_id = ?
+    GROUP BY importance_score
+    ORDER BY importance_score ASC
+  `).bind(user.id).all()
+
   return c.json({
     total: totalMemories?.count || 0,
     byCategory: categoriesCount.results,
     recent: recentMemories.results,
-    sentiments: sentimentStats.results
+    sentiments: sentimentStats.results,
+    importance: importanceStats.results
   })
 })
 
@@ -1167,6 +1207,13 @@ app.get('/', (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="theme-color" content="#1b1a17">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="MemoryLink">
+        <link rel="manifest" href="/manifest.webmanifest">
+        <link rel="icon" href="/static/app-icon.svg" type="image/svg+xml">
         <title>AI 기반 디지털 유품 정리 서비스</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
@@ -1243,35 +1290,32 @@ app.get('/', (c) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            box-sizing: border-box;
+            padding: 1.5rem;
+            background: #ffffff;
           }
           .auth-shell {
-            width: 100%;
-            min-height: 100vh;
+            width: min(980px, calc(100vw - 3rem));
             margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
           }
           .auth-column-title {
             display: none;
           }
           .auth-screen {
             width: 100%;
-            min-height: 100vh;
+            height: min(720px, calc(100vh - 3rem));
+            min-height: 640px;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem 1rem;
-            background: transparent;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 26px 70px rgba(79, 70, 229, 0.16);
             box-sizing: border-box;
           }
           .auth-form-panel {
-            width: 420px;
-            height: 660px;
-            padding: 3rem 2.35rem 2.1rem;
+            width: 360px;
+            min-height: 620px;
+            padding: 2.75rem 2rem 1.75rem;
             border-radius: 0.7rem;
             background: #ffffff;
             box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
@@ -1280,9 +1324,6 @@ app.get('/', (c) => {
             justify-content: flex-start;
             box-sizing: border-box;
             overflow: hidden;
-          }
-          #login-form {
-            justify-content: center;
           }
           .auth-brand-block {
             height: 132px;
@@ -1298,17 +1339,13 @@ app.get('/', (c) => {
             flex: 0 0 34px;
             display: flex;
             align-items: center;
-            margin: 0 0 1.05rem;
+            margin: 0 0 1rem;
           }
           .auth-form-body {
             flex: 1 1 auto;
             display: flex;
             flex-direction: column;
             gap: 1rem;
-            min-height: 0;
-          }
-          #login-submit {
-            flex: 0 0 auto;
           }
           .auth-form-body > :not([hidden]) ~ :not([hidden]) {
             margin-top: 0 !important;
@@ -1316,27 +1353,24 @@ app.get('/', (c) => {
           .auth-bottom-link {
             min-height: 32px;
             flex: 0 0 auto;
-            margin-top: 1.35rem !important;
+            margin-top: 1rem !important;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.2rem;
             text-align: center;
-            white-space: nowrap;
             position: relative;
             z-index: 1;
           }
           .auth-form-body .auth-primary-button {
-            flex: 0 0 auto;
-            margin-top: 0.35rem;
+            margin-top: auto;
           }
           .auth-login-spacer {
-            height: 1rem;
-            flex: 0 0 1rem;
+            height: 4rem;
+            flex: 0 0 4rem;
           }
           .auth-input {
             width: 100%;
-            height: 3rem;
+            height: 2.85rem;
             border-radius: 0.45rem;
             border: 1px solid #d8e0ec;
             background: #ffffff;
@@ -1350,20 +1384,11 @@ app.get('/', (c) => {
             background: #ffffff;
             box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12);
           }
-          .auth-input[type="password"]::-ms-reveal,
-          .auth-input[type="password"]::-ms-clear {
-            display: none;
-          }
-          .auth-input[type="password"]::-webkit-credentials-auto-fill-button,
-          .auth-input[type="password"]::-webkit-textfield-decoration-container {
-            visibility: hidden;
-            pointer-events: none;
-          }
           .auth-primary-button {
             width: 100%;
             border: 0;
             border-radius: 0.45rem;
-            padding: 1rem 1rem;
+            padding: 0.9rem 1rem;
             color: #ffffff;
             font-weight: 800;
             cursor: pointer;
@@ -1377,19 +1402,19 @@ app.get('/', (c) => {
           }
           @media (max-width: 860px) {
             .auth-container {
-              padding: 0;
+              padding: 1.5rem;
             }
             .auth-shell {
-              width: 100%;
+              max-width: 100%;
             }
             .auth-screen {
-              min-height: 100vh;
-              padding: 1rem;
+              height: calc(100vh - 3rem);
+              min-height: 620px;
+              padding: 1.25rem;
             }
             .auth-form-panel {
-              width: min(420px, 100%);
-              height: min(660px, calc(100vh - 2rem));
-              padding: 2.5rem 2rem 1.9rem;
+              width: min(360px, 100%);
+              min-height: 620px;
             }
           }
           .hidden { display: none !important; }
@@ -1516,21 +1541,338 @@ app.get('/', (c) => {
             box-shadow: 0 16px 40px rgba(102, 126, 234, 0.4);
             border-color: rgba(255, 255, 255, 0.8);
           }
+
+          /* v4 visual system: quiet digital archive */
+          :root {
+            --ink: #111827;
+            --forest: #10182b;
+            --forest-soft: #1f2b4f;
+            --paper: #f3f6fb;
+            --surface: #ffffff;
+            --line: #dbe3f0;
+            --muted: #667085;
+            --accent: #4169e1;
+            --gold: #ffb547;
+          }
+
+          * { box-sizing: border-box; }
+          body { background: var(--paper) !important; color: var(--ink); font-family: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif; }
+          button, input, textarea, select { border-radius: 10px !important; }
+
+          #main-app:not(.hidden) { min-height: 100vh; display: grid; grid-template-columns: 270px minmax(0, 1fr); }
+          #main-app > header { position: sticky !important; top: 0; height: 100vh; background: var(--forest) !important; box-shadow: none !important; z-index: 40; overflow: hidden; }
+          #main-app > header::after { content: "ARCHIVE  /  24"; position: absolute; left: 28px; bottom: 28px; color: rgba(255,255,255,.32); font-size: 12px; letter-spacing: .24em; }
+          #main-app > header > div { height: 100%; padding: 30px 24px !important; max-width: none !important; }
+          #main-app > header > div > div { height: 100%; display: flex !important; flex-direction: column; align-items: stretch !important; justify-content: flex-start !important; gap: 36px; }
+          #main-app > header > div > div > button { justify-content: flex-start; padding: 0 6px; }
+          #main-app > header h1 { color: #fff !important; font-size: 22px !important; letter-spacing: -.04em; }
+          #main-app > header p { color: #9eacd0 !important; font-size: 13px !important; margin-top: 4px; }
+          #main-app > header .fa-heart { color: #7aa2ff !important; }
+          #main-app > header > div > div > div { display: flex !important; flex: 1; flex-direction: column; align-items: stretch !important; gap: 18px !important; }
+          #main-app nav { display: flex !important; flex-direction: column; gap: 6px; }
+          #main-app nav button { width: 100%; padding: 13px 14px !important; color: #dce8e3 !important; background: transparent !important; border: 1px solid transparent; text-align: left; font-size: 14px !important; }
+          #main-app nav button:hover { background: rgba(255,255,255,.09) !important; border-color: rgba(255,255,255,.12); color: white !important; transform: translateX(3px); }
+          #main-app > header > div > div > div > div { margin-top: auto; padding: 14px; border: 1px solid rgba(255,255,255,.12); background: rgba(65,105,225,.12); border-radius: 14px; }
+          #main-app #user-name { color: white !important; flex: 1; }
+          #main-app > main { width: 100%; max-width: 1500px !important; padding: 48px clamp(24px, 4vw, 64px) 90px !important; }
+          #main-app h2 { color: var(--ink) !important; font-size: clamp(30px, 4vw, 48px) !important; letter-spacing: -.055em; line-height: 1; }
+          #main-app h3 { letter-spacing: -.025em; }
+
+          #statistics { grid-template-columns: repeat(12, minmax(0, 1fr)) !important; gap: 14px !important; }
+          #statistics > div { grid-column: span 3; min-height: 160px; border-radius: 18px !important; box-shadow: none; padding: 24px !important; display: flex; flex-direction: column; justify-content: space-between; background-color: var(--surface) !important; background-image: none !important; border: 1px solid var(--line); color: var(--ink) !important; }
+          #statistics > div:first-child { grid-column: span 5; background-color: var(--accent) !important; background-image: none !important; border-color: var(--accent); color: white !important; }
+          #statistics > div:nth-child(2) { grid-column: span 3; }
+          #statistics > div:nth-child(3) { grid-column: span 2; }
+          #statistics > div:nth-child(4) { grid-column: span 2; background-color: var(--forest) !important; background-image: none !important; color: white !important; }
+          #statistics i { font-size: 22px !important; opacity: .72; }
+          #statistics .text-4xl { font-size: 42px !important; letter-spacing: -.05em; }
+
+          #dashboard-view > .grid > div, #dashboard-view > .bg-white { background: var(--surface) !important; border: 1px solid var(--line); border-radius: 20px !important; box-shadow: none !important; }
+          #categories-chart button, #category-chips button { box-shadow: none !important; }
+          .add-memory-card { background: var(--forest) !important; border: 0 !important; border-radius: 16px !important; }
+          .add-memory-card:hover { transform: translateY(-3px); box-shadow: 0 16px 36px rgba(23,62,52,.18); }
+
+          #memories-view > .flex:first-child { align-items: flex-end !important; margin-bottom: 24px !important; }
+          #memories-view > .flex:first-child > .flex:last-child { background: var(--surface); border: 1px solid var(--line); padding: 8px; border-radius: 16px; box-shadow: 0 8px 30px rgba(23,33,29,.06); }
+          #memories-view input, #memories-view select { border: 0 !important; background: #f1eee6; min-height: 44px; color: var(--ink); }
+          #dashboard-view button.bg-gradient-to-r, #memories-view button.bg-gradient-to-r { background-color: var(--accent) !important; background-image: none !important; box-shadow: 0 10px 24px rgba(65,105,225,.24) !important; }
+          #category-chips button { border-color: var(--line) !important; background: transparent !important; color: var(--muted) !important; }
+          #category-chips button:first-child { background: var(--accent) !important; color: white !important; border-color: var(--accent) !important; }
+          #favorites-filter, #bulk-delete-button, #memories-view button[onclick*="import-input"] { background: transparent !important; border-color: var(--line) !important; min-height: 42px; }
+
+          #memories-grid { gap: 20px !important; }
+          .memory-card { border-radius: 20px !important; border: 1px solid var(--line); background: var(--surface) !important; box-shadow: none !important; }
+          .memory-card:hover { transform: translateY(-5px); border-color: #aebfe8; box-shadow: 0 18px 42px rgba(31,43,79,.12) !important; }
+          .memory-card img { height: 240px; filter: saturate(.86) contrast(.96); }
+          .memory-card .p-4 { padding: 20px !important; }
+          .memory-card h3 { font-size: 20px !important; letter-spacing: -.04em; }
+          .memory-card .category-badge { background: #eaf0ff !important; color: #3157c7 !important; }
+
+          .fab-button { width: 62px; height: 62px; background: var(--accent) !important; box-shadow: 0 12px 30px rgba(65,105,225,.34) !important; }
+          .fab-menu-button { border-color: var(--accent) !important; color: var(--accent) !important; }
+          .fab-menu-button:hover { background: var(--accent) !important; color: white !important; }
+          .modal { backdrop-filter: blur(9px); background: rgba(12,19,39,.68) !important; }
+          .modal > div { background: var(--surface) !important; border-radius: 22px !important; border: 1px solid rgba(255,255,255,.5); }
+          .modal input, .modal textarea, .modal select { background: white; border-color: var(--line) !important; }
+
+          .auth-container { background: var(--paper) !important; }
+          .auth-shell { background: var(--surface) !important; border-radius: 22px !important; overflow: hidden; }
+          .auth-screen { position: relative; justify-content: flex-end !important; padding: 42px !important; background: linear-gradient(145deg, #10182b 0%, #1f2b4f 100%) !important; box-shadow: 0 24px 70px rgba(31,43,79,.2) !important; }
+          .auth-screen::before { content: "당신의 기록을\\A 오래 남는 아카이브로."; white-space: pre; position: absolute; left: 7%; top: 50%; transform: translateY(-50%); width: 42%; color: white; font-size: clamp(30px, 4vw, 54px); line-height: 1.12; letter-spacing: -.06em; font-weight: 800; }
+          .auth-screen::after { content: "MEMORYLINK  /  PRIVATE ARCHIVE"; position: absolute; left: 7%; bottom: 48px; color: #91a4d0; font-size: 12px; letter-spacing: .18em; }
+          .auth-form-panel { width: min(390px, 44%) !important; border-radius: 18px !important; box-shadow: 0 22px 60px rgba(0,0,0,.18) !important; }
+          .auth-primary-button { background: var(--accent) !important; border-radius: 10px !important; }
+          .auth-brand-block .fa-heart, .auth-bottom-link button { color: var(--accent) !important; }
+          .auth-form-panel .text-green-600, .auth-form-panel .text-green-700 { color: #4169e1 !important; }
+          .auth-form-panel .bg-green-50 { background: #eef3ff !important; border-color: #c9d6ff !important; }
+
+          @media (max-width: 1050px) {
+            #main-app:not(.hidden) { grid-template-columns: 220px minmax(0, 1fr); }
+            #statistics > div, #statistics > div:first-child { grid-column: span 6; }
+          }
+          @media (max-width: 768px) {
+            #main-app:not(.hidden) { display: block; }
+            #main-app > header { position: sticky !important; height: auto; overflow: visible; }
+            #main-app > header::after { display: none; }
+            #main-app > header > div { padding: 14px 18px !important; }
+            #main-app > header > div > div { flex-direction: row; align-items: center !important; gap: 10px; }
+            #main-app > header > div > div > div { flex-direction: row; flex: initial; margin-left: auto; }
+            #main-app > header > div > div > div > div { margin: 0; padding: 8px; border: 0; background: transparent; }
+            #main-app > header nav { display: none !important; }
+            #main-app > header p, #main-app #user-name { display: none; }
+            #main-app > main { padding: 30px 16px 90px !important; }
+            #statistics { grid-template-columns: repeat(2, 1fr) !important; }
+            #statistics > div, #statistics > div:first-child { grid-column: span 1; min-height: 135px; }
+            #memories-view > .flex:first-child > .flex:last-child { width: 100%; align-items: stretch; }
+            .memory-card img { height: 210px; }
+            .auth-container { padding: 0 !important; }
+            .auth-shell { width: 100%; border-radius: 0 !important; }
+            .auth-screen { min-height: 100vh; height: auto; padding: 24px !important; justify-content: center !important; }
+            .auth-screen::before, .auth-screen::after { display: none; }
+            .auth-form-panel { width: min(390px, 100%) !important; }
+          }
+          /* v5 complete redesign: digital museum */
+          :root {
+            --museum-black: #0b0b0d;
+            --museum-ink: #17171c;
+            --museum-bg: #f5f5f7;
+            --museum-white: #ffffff;
+            --museum-line: #dedee4;
+            --museum-muted: #71717a;
+            --museum-violet: #6d4aff;
+            --museum-lilac: #eeeaff;
+            --museum-yellow: #ffd84d;
+          }
+
+          body { background: var(--museum-bg) !important; color: var(--museum-ink); }
+          #main-app:not(.hidden) { display: block; min-height: 100vh; padding-top: 18px; }
+          #main-app > header { position: sticky !important; top: 18px; width: calc(100% - 36px); max-width: 1420px; height: 76px; margin: 0 auto; overflow: visible; border: 1px solid rgba(222,222,228,.9); border-radius: 22px; background: rgba(255,255,255,.88) !important; backdrop-filter: blur(18px); box-shadow: 0 12px 40px rgba(15,15,20,.07) !important; }
+          #main-app > header::after { display: none; }
+          #main-app > header > div { height: 100%; max-width: none !important; padding: 10px 14px 10px 20px !important; }
+          #main-app > header > div > div { height: 100%; display: flex !important; flex-direction: row; align-items: center !important; justify-content: space-between !important; gap: 20px; }
+          #main-app > header > div > div > button { min-width: 205px; padding: 0 !important; }
+          #main-app > header h1 { color: var(--museum-black) !important; font-size: 19px !important; letter-spacing: -.04em; }
+          #main-app > header p { display: none; }
+          #main-app > header .fa-heart { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; color: white !important; background: var(--museum-black); font-size: 16px !important; }
+          #main-app > header > div > div > div { flex: 1; display: flex !important; flex-direction: row; align-items: center !important; justify-content: flex-end; gap: 18px !important; }
+          #main-app nav { display: flex !important; flex-direction: row; justify-content: center; gap: 2px; }
+          #main-app nav button { width: auto; padding: 11px 13px !important; color: #50505a !important; background: transparent !important; border: 0; border-radius: 12px !important; font-size: 14px !important; white-space: nowrap; }
+          #main-app nav button:hover { color: var(--museum-black) !important; background: #f0f0f3 !important; transform: none; }
+          #main-app nav button:last-child { color: white !important; background: var(--museum-violet) !important; margin-left: 6px; }
+          #main-app > header > div > div > div > div { margin: 0; padding: 6px 8px 6px 6px; min-width: 170px; border: 1px solid var(--museum-line); border-radius: 14px; background: white; }
+          #main-app #user-name { display: inline; color: var(--museum-black) !important; }
+          #main-app > main { width: calc(100% - 36px); max-width: 1420px !important; padding: 64px 8px 100px !important; margin: 0 auto; }
+          #main-app h2 { color: var(--museum-black) !important; font-size: clamp(38px, 5vw, 70px) !important; letter-spacing: -.075em; font-weight: 900; }
+          #main-app h3 { color: var(--museum-black); }
+
+          #dashboard-view > .flex:first-child { align-items: flex-end !important; margin-bottom: 36px !important; }
+          #dashboard-view > .flex:first-child::after { content: "나의 기록 컬렉션"; margin-right: auto; margin-left: 24px; padding-bottom: 5px; color: var(--museum-muted); font-size: 15px; }
+          #dashboard-view button.bg-gradient-to-r, #memories-view button.bg-gradient-to-r { padding: 13px 18px !important; background: var(--museum-black) !important; background-image: none !important; border-radius: 14px !important; box-shadow: none !important; }
+
+          #statistics { display: grid !important; grid-template-columns: 1.6fr 1fr 1fr 1fr !important; gap: 14px !important; margin-bottom: 22px !important; }
+          #statistics > div, #statistics > div:first-child, #statistics > div:nth-child(4) { grid-column: auto; min-height: 190px; padding: 24px !important; border: 1px solid var(--museum-line); border-radius: 24px !important; background: var(--museum-white) !important; color: var(--museum-black) !important; }
+          #statistics > div:first-child { color: white !important; background: var(--museum-violet) !important; border-color: var(--museum-violet); }
+          #statistics > div:nth-child(3) { background: var(--museum-yellow) !important; border-color: var(--museum-yellow); }
+          #statistics > div:nth-child(4) { color: white !important; background: var(--museum-black) !important; border-color: var(--museum-black); }
+          #statistics i { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: rgba(127,127,140,.12); font-size: 17px !important; }
+          #statistics .text-4xl { font-size: 54px !important; line-height: 1; }
+
+          #dashboard-view > .grid { gap: 22px !important; }
+          #dashboard-view > .grid > div, #dashboard-view > .bg-white { border: 1px solid var(--museum-line); border-radius: 26px !important; background: var(--museum-white) !important; box-shadow: none !important; padding: 28px !important; }
+          #categories-chart > div:first-child { background: var(--museum-black) !important; background-image: none !important; border-radius: 20px !important; }
+          .add-memory-card { background: var(--museum-lilac) !important; color: var(--museum-violet) !important; border: 1px dashed #bcaeff !important; border-radius: 18px !important; }
+          .add-memory-card:hover { transform: translateY(-3px); box-shadow: none !important; border-color: var(--museum-violet) !important; }
+
+          #memories-view > .flex:first-child { display: grid !important; grid-template-columns: 1fr auto; align-items: end !important; gap: 30px; margin-bottom: 22px !important; }
+          #memories-view > .flex:first-child > .flex:last-child { padding: 7px; border: 1px solid var(--museum-line); border-radius: 16px; background: white; box-shadow: none; }
+          #memories-view input, #memories-view select { min-height: 46px; border: 0 !important; background: #f2f2f5; color: var(--museum-black); }
+          #category-chips { gap: 8px !important; }
+          #category-chips button { padding: 9px 14px !important; border: 1px solid var(--museum-line) !important; border-radius: 999px !important; background: white !important; color: #555560 !important; }
+          #category-chips button:first-child { border-color: var(--museum-black) !important; background: var(--museum-black) !important; color: white !important; }
+          #favorites-filter, #bulk-delete-button, #memories-view button[onclick*="import-input"] { min-height: 42px; border: 1px solid var(--museum-line) !important; border-radius: 12px !important; background: white !important; }
+
+          #memories-grid { grid-template-columns: repeat(12, minmax(0, 1fr)) !important; gap: 18px !important; }
+          .memory-card { grid-column: span 4; border: 0; border-radius: 24px !important; background: white !important; box-shadow: 0 1px 0 rgba(0,0,0,.06) !important; }
+          .memory-card:nth-child(5n+1), .memory-card:nth-child(5n+2) { grid-column: span 6; }
+          .memory-card:hover { transform: translateY(-6px); border: 0; box-shadow: 0 22px 60px rgba(20,20,28,.12) !important; }
+          .memory-card img { height: 280px; filter: none; }
+          .memory-card:nth-child(5n+1) img, .memory-card:nth-child(5n+2) img { height: 360px; }
+          .memory-card .p-4 { padding: 22px !important; }
+          .memory-card h3 { font-size: 23px !important; font-weight: 850; }
+          .memory-card .category-badge { border-radius: 999px !important; background: var(--museum-lilac) !important; color: var(--museum-violet) !important; }
+          .memory-card label, .memory-card > button { width: 38px !important; height: 38px !important; border-radius: 50% !important; }
+
+          .fab-button { width: 64px; height: 64px; border-radius: 20px !important; background: var(--museum-violet) !important; box-shadow: 0 16px 36px rgba(109,74,255,.3) !important; }
+          .fab-menu-button { border-color: var(--museum-black) !important; color: var(--museum-black) !important; }
+          .fab-menu-button:hover { background: var(--museum-black) !important; }
+          .modal { background: rgba(10,10,14,.72) !important; backdrop-filter: blur(14px); }
+          .modal > div { border: 0; border-radius: 28px !important; background: white !important; box-shadow: 0 34px 90px rgba(0,0,0,.3); }
+          .modal input, .modal textarea, .modal select { border: 1px solid var(--museum-line) !important; border-radius: 12px !important; background: #f8f8fa; }
+
+          .auth-container { padding: 18px !important; background: var(--museum-bg) !important; }
+          .auth-shell { width: min(1180px, calc(100vw - 36px)); border-radius: 30px !important; background: white !important; }
+          .auth-screen { min-height: 720px; padding: 48px !important; background: var(--museum-black) !important; border-radius: 30px; }
+          .auth-screen::before { content: "기록은 사라지지 않고,\\A 새로운 이야기가 됩니다."; color: white; font-size: clamp(34px, 4.6vw, 64px); }
+          .auth-screen::after { color: #85858f; }
+          .auth-form-panel { width: min(420px, 43%) !important; min-height: 620px; padding: 46px 34px 28px !important; border-radius: 24px !important; }
+          .auth-brand-block .fa-heart { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 18px; color: white !important; background: var(--museum-violet); font-size: 25px !important; }
+          .auth-primary-button { background: var(--museum-violet) !important; box-shadow: 0 12px 28px rgba(109,74,255,.25) !important; }
+          .auth-bottom-link button { color: var(--museum-violet) !important; }
+          .auth-form-panel .text-green-600, .auth-form-panel .text-green-700 { color: var(--museum-violet) !important; }
+
+          @media (max-width: 1050px) {
+            #main-app nav button { padding: 10px !important; font-size: 0 !important; }
+            #main-app nav button i { margin: 0 !important; font-size: 15px; }
+            #statistics { grid-template-columns: repeat(2, 1fr) !important; }
+            .memory-card, .memory-card:nth-child(5n+1), .memory-card:nth-child(5n+2) { grid-column: span 6; }
+          }
+          @media (max-width: 768px) {
+            #main-app:not(.hidden) { padding-top: 0; }
+            #main-app > header { top: 0; width: 100%; height: 68px; border-width: 0 0 1px; border-radius: 0; }
+            #main-app > header > div { padding: 9px 14px !important; }
+            #main-app > header > div > div > button { min-width: 0; }
+            #main-app > header h1 { font-size: 17px !important; }
+            #main-app > header > div > div > div { flex: initial; }
+            #main-app > header > div > div > div > div { min-width: 0; border: 0; padding: 0; }
+            #main-app #user-name, #main-app > header nav { display: none !important; }
+            #main-app > main { width: 100%; padding: 40px 16px 90px !important; }
+            #dashboard-view > .flex:first-child::after { display: none; }
+            #statistics { grid-template-columns: repeat(2, 1fr) !important; }
+            #statistics > div, #statistics > div:first-child, #statistics > div:nth-child(4) { min-height: 148px; padding: 18px !important; }
+            #statistics .text-4xl { font-size: 40px !important; }
+            #memories-view > .flex:first-child { display: flex !important; align-items: stretch !important; }
+            .memory-card, .memory-card:nth-child(5n+1), .memory-card:nth-child(5n+2) { grid-column: span 12; }
+            .memory-card img, .memory-card:nth-child(5n+1) img, .memory-card:nth-child(5n+2) img { height: 250px; }
+            .auth-container { padding: 0 !important; }
+            .auth-shell, .auth-screen { width: 100%; min-height: 100vh; border-radius: 0 !important; }
+            .auth-screen { justify-content: center !important; padding: 22px !important; background: var(--museum-black) !important; }
+            .auth-screen::before, .auth-screen::after { display: none; }
+            .auth-form-panel { width: min(420px, 100%) !important; }
+          }
+          /* v6 refined product UI */
+          :root { --ui-blue:#2563eb; --ui-blue-dark:#1d4ed8; --ui-navy:#0f172a; --ui-bg:#f7f9fc; --ui-card:#fff; --ui-border:#e5eaf2; --ui-muted:#64748b; }
+          body { background: var(--ui-bg) !important; color: var(--ui-navy); }
+          #main-app:not(.hidden) { display:block; padding:0; }
+          #main-app > header { position:sticky !important; top:0; width:100%; max-width:none; height:72px; margin:0; border:0; border-bottom:1px solid var(--ui-border); border-radius:0; background:rgba(255,255,255,.96) !important; box-shadow:none !important; }
+          #main-app > header > div { max-width:1320px !important; margin:0 auto; padding:10px 24px !important; }
+          #main-app > header > div > div { gap:28px; }
+          #main-app > header > div > div > button { min-width:190px; }
+          #main-app > header .fa-heart { width:38px; height:38px; border-radius:11px; background:linear-gradient(135deg,#2563eb,#60a5fa); }
+          #main-app > header h1 { font-size:20px !important; }
+          #main-app nav { gap:4px; }
+          #main-app nav button { padding:10px 12px !important; border-radius:9px !important; color:#475569 !important; }
+          #main-app nav button:hover { background:#eff6ff !important; color:var(--ui-blue) !important; }
+          #main-app nav button:last-child { background:var(--ui-blue) !important; color:#fff !important; border-radius:10px !important; }
+          #main-app > header > div > div > div > div { min-width:160px; border:0; background:#f1f5f9; border-radius:12px; }
+          #main-app > main { width:100%; max-width:1320px !important; margin:0 auto; padding:44px 24px 90px !important; }
+          #main-app h2 { font-size:38px !important; line-height:1.15; letter-spacing:-.045em; font-weight:800; }
+          #dashboard-view > .flex:first-child { align-items:center !important; margin-bottom:28px !important; }
+          #dashboard-view > .flex:first-child::after { display:none; }
+          #dashboard-view button.bg-gradient-to-r, #memories-view button.bg-gradient-to-r { background:var(--ui-blue) !important; padding:12px 18px !important; border-radius:10px !important; box-shadow:0 8px 18px rgba(37,99,235,.2) !important; }
+
+          #statistics { display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:16px !important; margin-bottom:24px !important; }
+          #statistics > .metric-card { grid-column:auto !important; min-height:148px; padding:22px !important; border:1px solid var(--ui-border) !important; border-radius:16px !important; background:#fff !important; color:var(--ui-navy) !important; box-shadow:0 4px 14px rgba(15,23,42,.035) !important; }
+          #statistics > .metric-card.metric-primary { background:linear-gradient(135deg,#2563eb,#3b82f6) !important; border-color:#2563eb !important; color:#fff !important; }
+          #statistics > .metric-card:nth-child(4) { background:#fff !important; border-color:var(--ui-border) !important; color:var(--ui-navy) !important; }
+          #statistics > .metric-card i { width:36px; height:36px; border-radius:10px; background:#eff6ff; color:var(--ui-blue); }
+          #statistics > .metric-card.metric-primary i { background:rgba(255,255,255,.18); color:#fff; }
+          #statistics > .metric-card .text-4xl { font-size:38px !important; }
+          #dashboard-view > .grid { gap:20px !important; }
+          #dashboard-view > .grid > div, #dashboard-view > .bg-white { padding:24px !important; border:1px solid var(--ui-border); border-radius:18px !important; background:#fff !important; box-shadow:0 5px 18px rgba(15,23,42,.04) !important; }
+          #categories-chart > div:first-child { background:linear-gradient(135deg,#172554,#1e3a8a) !important; border-radius:14px !important; }
+          .add-memory-card { background:#eff6ff !important; color:var(--ui-blue) !important; border:1px dashed #93c5fd !important; border-radius:14px !important; }
+
+          #memories-view > .flex:first-child { display:flex !important; align-items:center !important; margin-bottom:20px !important; }
+          #memories-view > .flex:first-child > .flex:last-child { padding:6px; border:1px solid var(--ui-border); border-radius:12px; background:#fff; }
+          #memories-view input, #memories-view select { min-height:42px; border-radius:8px !important; background:#f8fafc; }
+          #category-chips button { padding:8px 13px !important; border-color:var(--ui-border) !important; border-radius:9px !important; background:#fff !important; }
+          #category-chips button:first-child { border-color:var(--ui-blue) !important; background:var(--ui-blue) !important; }
+          #memories-grid { grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:20px !important; }
+          .memory-card, .memory-card:nth-child(5n+1), .memory-card:nth-child(5n+2) { grid-column:auto; border:1px solid var(--ui-border); border-radius:16px !important; box-shadow:0 4px 14px rgba(15,23,42,.04) !important; }
+          .memory-card:hover { transform:translateY(-4px); border-color:#bfdbfe; box-shadow:0 16px 32px rgba(37,99,235,.1) !important; }
+          .memory-card img, .memory-card:nth-child(5n+1) img, .memory-card:nth-child(5n+2) img { height:230px; }
+          .memory-card .p-4 { padding:18px !important; }
+          .memory-card h3 { font-size:19px !important; }
+          .memory-card .category-badge { background:#eff6ff !important; color:var(--ui-blue) !important; }
+          .fab-button { width:58px; height:58px; border-radius:16px !important; background:var(--ui-blue) !important; box-shadow:0 12px 28px rgba(37,99,235,.28) !important; }
+          .fab-menu-button { border-color:var(--ui-blue) !important; color:var(--ui-blue) !important; }
+          .fab-menu-button:hover { background:var(--ui-blue) !important; }
+          .modal { background:rgba(15,23,42,.6) !important; backdrop-filter:blur(8px); }
+          .modal > div { border-radius:20px !important; box-shadow:0 28px 70px rgba(15,23,42,.26); }
+
+          .auth-container { padding:24px !important; background:linear-gradient(135deg,#eff6ff 0%,#f8fafc 48%,#eef2ff 100%) !important; }
+          .auth-shell { width:min(1050px,calc(100vw - 48px)); border-radius:24px !important; box-shadow:0 25px 70px rgba(30,64,175,.12); }
+          .auth-screen { min-height:680px; padding:44px !important; border-radius:24px; background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 60%,#60a5fa 100%) !important; }
+          .auth-screen::before { content:"소중한 순간을\\A한곳에서 관리하세요."; font-size:clamp(34px,4.2vw,56px); }
+          .auth-screen::after { content:"MEMORYLINK · DIGITAL ARCHIVE"; color:#bfdbfe; }
+          .auth-form-panel { width:min(400px,44%) !important; min-height:590px; padding:40px 32px 26px !important; border-radius:18px !important; }
+          .auth-brand-block .fa-heart { border-radius:14px; background:linear-gradient(135deg,#2563eb,#60a5fa); }
+          .auth-primary-button { background:var(--ui-blue) !important; border-radius:10px !important; box-shadow:0 10px 22px rgba(37,99,235,.22) !important; }
+          .auth-bottom-link button, .auth-form-panel .text-green-600, .auth-form-panel .text-green-700 { color:var(--ui-blue) !important; }
+
+          @media(max-width:1000px){ #main-app nav button{font-size:0 !important} #main-app nav button i{font-size:15px} #statistics{grid-template-columns:repeat(2,1fr)!important} #memories-grid{grid-template-columns:repeat(2,1fr)!important} }
+          @media(max-width:768px){ #main-app>header{height:64px} #main-app>header>div{padding:8px 14px!important} #main-app>header>div>div>button{min-width:0} #main-app nav{display:none!important} #main-app>header>div>div>div>div{min-width:0;background:transparent} #main-app #user-name{display:none} #main-app>main{padding:32px 16px 80px!important} #statistics{grid-template-columns:repeat(2,1fr)!important} #statistics>.metric-card{min-height:132px;padding:17px!important} #memories-grid{grid-template-columns:1fr!important} .memory-card,.memory-card:nth-child(5n+1),.memory-card:nth-child(5n+2){grid-column:auto} .auth-container{padding:0!important}.auth-shell,.auth-screen{width:100%;min-height:100vh;border-radius:0!important}.auth-screen{justify-content:center!important;padding:20px!important}.auth-screen::before,.auth-screen::after{display:none}.auth-form-panel{width:min(400px,100%)!important} }
+          .memory-card-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid var(--ui-border); }
+          .memory-card-actions button { min-height:40px; display:inline-flex; align-items:center; justify-content:center; gap:7px; border-radius:9px !important; font-size:14px; font-weight:700; transition:background .18s ease,color .18s ease,border-color .18s ease; }
+          .memory-edit-button { border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; }
+          .memory-edit-button:hover { border-color:#2563eb; background:#2563eb; color:#fff; }
+          .memory-delete-button { border:1px solid #fecaca; background:#fff1f2; color:#dc2626; }
+          .memory-delete-button:hover { border-color:#dc2626; background:#dc2626; color:#fff; }
+          @media(max-width:480px){ .memory-card-actions button{min-height:44px;font-size:15px} }
         </style>
+        <link rel="stylesheet" href="/static/premium.css">
     </head>
     <body class="bg-gray-50">
         <!-- Auth Container -->
         <div id="auth-container" class="auth-container">
             <div class="auth-shell">
-                <h2 id="auth-title" class="auth-column-title">회원가입</h2>
+                <h2 id="auth-title" class="auth-column-title">
+                    <span class="auth-story-kicker">MemoryLink · Private Archive</span>
+                    <span class="auth-story-body auth-story-register">
+                        <span class="auth-story-title">당신의 기억을<br>안전하게 이어주세요.</span>
+                        <span class="auth-story-copy">사진과 기록에 담긴 감정까지 AI가 정리해<br>오래도록 다시 꺼내볼 수 있게 보관합니다.</span>
+                    </span>
+                    <span class="auth-story-body auth-story-login">
+                        <span class="auth-story-title">기억을 다시 만나는<br>가장 조용한 시간.</span>
+                        <span class="auth-story-copy">보관해 둔 순간과 감정을<br>언제든 편안하게 다시 꺼내보세요.</span>
+                    </span>
+                    <span class="auth-story-points">
+                        <span><i class="fas fa-lock"></i> 나만의 비공개 보관함</span>
+                        <span><i class="fas fa-brain"></i> AI 감정 및 장면 분석</span>
+                        <span><i class="fas fa-download"></i> 언제든 데이터 백업</span>
+                    </span>
+                </h2>
                 <div class="auth-screen">
                     <div id="register-form" class="auth-form-panel">
                         <div class="auth-brand-block">
                             <i class="fas fa-heart text-5xl text-purple-600 mb-4"></i>
-                            <h1 class="text-3xl font-extrabold text-gray-900">AI 추억 관리</h1>
-                            <p class="text-xs text-gray-500 mt-2">소중한 추억을 영원히 간직하세요</p>
+                            <h1 class="text-3xl font-extrabold text-gray-900">MemoryLink</h1>
+                            <p class="text-xs text-gray-500 mt-2">새로운 개인 아카이브를 시작하세요</p>
                         </div>
-                        <h3 class="auth-form-title text-xl font-extrabold text-gray-900">회원가입</h3>
+                        <div class="auth-form-heading">
+                            <span>01</span>
+                            <div><h3 class="auth-form-title text-xl font-extrabold text-gray-900">계정 만들기</h3><p>간단한 정보만 입력하면 바로 시작할 수 있어요.</p></div>
+                        </div>
                         <div id="register-success-message" class="hidden rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700 mb-3">
                             회원가입이 완료되었습니다. 로그인해 주세요.
                         </div>
@@ -1564,10 +1906,13 @@ app.get('/', (c) => {
                     <div id="login-form" class="auth-form-panel hidden">
                         <div class="auth-brand-block">
                             <i class="fas fa-heart text-5xl text-purple-600 mb-5"></i>
-                            <h1 class="text-3xl font-extrabold text-gray-900">AI 추억 관리</h1>
-                            <p class="text-xs text-gray-500 mt-2">소중한 추억을 영원히 간직하세요</p>
+                            <h1 class="text-3xl font-extrabold text-gray-900">MemoryLink</h1>
+                            <p class="text-xs text-gray-500 mt-2">당신의 아카이브로 돌아오세요</p>
                         </div>
-                        <h3 class="auth-form-title text-xl font-extrabold text-gray-900">로그인</h3>
+                        <div class="auth-form-heading">
+                            <span><i class="fas fa-key"></i></span>
+                            <div><h3 class="auth-form-title text-xl font-extrabold text-gray-900">로그인</h3><p>저장된 추억을 계속 이어가세요.</p></div>
+                        </div>
                         <form id="login-submit" class="auth-form-body space-y-5">
                             <div>
                                 <label class="block text-xs font-semibold text-gray-700 mb-1.5">이메일</label>
@@ -1582,7 +1927,6 @@ app.get('/', (c) => {
                                     </button>
                                 </div>
                             </div>
-                            <div class="auth-login-spacer" aria-hidden="true"></div>
                             <button type="submit" class="auth-primary-button">로그인</button>
                         </form>
                         <p class="auth-bottom-link text-sm text-gray-500">
@@ -1597,26 +1941,29 @@ app.get('/', (c) => {
         <!-- Main App Container (hidden until logged in) -->
         <div id="main-app" class="hidden">
             <!-- Header -->
-            <header class="bg-white shadow-sm sticky top-0 z-40">
+            <header class="sticky top-0 z-40" style="background:#1b1a17 !important;border-color:#1b1a17 !important">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div class="flex items-center justify-between">
                         <button onclick="showView('dashboard')" class="flex items-center space-x-3 text-left hover:opacity-80 transition" title="메인화면">
                             <i class="fas fa-heart text-3xl text-purple-600"></i>
                             <div>
-                                <h1 class="text-2xl font-bold text-gray-900">AI 유품 정리</h1>
-                                <p class="text-xs text-gray-500">소중한 추억 보관 서비스</p>
+                                <h1 class="text-2xl font-bold text-gray-900">MemoryLink</h1>
+                                <p class="text-xs text-gray-500">Private Digital Archive</p>
                             </div>
                         </button>
                         <div class="flex items-center space-x-4">
                             <nav class="hidden md:flex space-x-2">
                                 <button onclick="showView('dashboard')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
-                                    <i class="fas fa-home mr-1"></i>대시보드
+                                    <i class="fas fa-wand-magic-sparkles mr-1"></i>오늘의 기억
                                 </button>
                                 <button onclick="showView('memories')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
                                     <i class="fas fa-images mr-1"></i>추억
                                 </button>
                                 <button onclick="showView('timeline')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
                                     <i class="fas fa-stream mr-1"></i>타임라인
+                                </button>
+                                <button onclick="showRandomMemory()" class="px-3 py-2 text-sm text-gray-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">
+                                    <i class="fas fa-shuffle mr-1"></i>추억 다시보기
                                 </button>
                                 <button onclick="exportData()" class="px-3 py-2 text-sm text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-lg transition">
                                     <i class="fas fa-download mr-1"></i>내보내기
@@ -1642,34 +1989,44 @@ app.get('/', (c) => {
                 <!-- Dashboard View -->
                 <div id="dashboard-view" class="view-section">
                     <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-3xl font-bold text-gray-900">대시보드</h2>
+                        <div>
+                            <p class="recall-page-kicker">AI MEMORY RECALL</p>
+                            <h2 class="text-3xl font-bold text-gray-900">오늘의 기억</h2>
+                            <p class="recall-page-description">기록을 쌓는 데서 끝나지 않도록, 다시 만날 순간을 골라드려요.</p>
+                        </div>
                         <button onclick="showAddMemory()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition font-semibold shadow-lg">
                             <i class="fas fa-plus-circle mr-2"></i>새 추억 추가
                         </button>
                     </div>
+
+                    <!-- AI Memory Recall -->
+                    <section id="recall-hub" class="recall-hub" aria-labelledby="recall-hub-title">
+                        <div class="recall-loading"><i class="fas fa-circle-notch fa-spin"></i> 오늘 다시 만날 기억을 고르고 있어요.</div>
+                    </section>
                     
                     <!-- Statistics -->
                     <div id="statistics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div class="stat-card text-white p-6 rounded-xl">
+                        <div class="metric-card metric-primary p-6 rounded-xl">
                             <i class="fas fa-database text-3xl mb-2"></i>
                             <p class="text-sm opacity-90">총 추억</p>
                             <p id="total-memories" class="text-4xl font-bold">0</p>
                         </div>
-                        <div class="bg-gradient-to-br from-green-400 to-green-600 text-white p-6 rounded-xl">
+                        <div class="metric-card p-6 rounded-xl">
                             <i class="fas fa-smile text-3xl mb-2"></i>
                             <p class="text-sm opacity-90">긍정적 추억</p>
                             <p id="positive-memories" class="text-4xl font-bold">0</p>
                         </div>
-                        <div class="bg-gradient-to-br from-blue-400 to-blue-600 text-white p-6 rounded-xl">
+                        <div class="metric-card p-6 rounded-xl">
                             <i class="fas fa-meh text-3xl mb-2"></i>
                             <p class="text-sm opacity-90">중립적 추억</p>
                             <p id="neutral-memories" class="text-4xl font-bold">0</p>
                         </div>
-                        <div class="bg-gradient-to-br from-orange-400 to-orange-600 text-white p-6 rounded-xl">
+                        <button type="button" onclick="showImportanceChart()" class="metric-card metric-clickable p-6 rounded-xl" aria-label="평균 중요도 분포 그래프 보기">
                             <i class="fas fa-chart-line text-3xl mb-2"></i>
                             <p class="text-sm opacity-90">평균 중요도</p>
                             <p id="avg-importance" class="text-4xl font-bold">0</p>
-                        </div>
+                            <span class="metric-card-hint">분포 보기 <i class="fas fa-arrow-right"></i></span>
+                        </button>
                     </div>
 
                     <!-- Collection Health -->
@@ -1724,10 +2081,36 @@ app.get('/', (c) => {
                             <select id="category-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
                                 <option value="">모든 카테고리</option>
                             </select>
+                            <select id="sort-filter" aria-label="추억 정렬" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <option value="newest">최신순</option>
+                                <option value="oldest">오래된순</option>
+                                <option value="importance">중요도순</option>
+                                <option value="title">제목순</option>
+                            </select>
+                            <select id="emotion-filter" aria-label="AI 감정 필터" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <option value="">모든 감정</option>
+                                <option value="positive">😊 긍정 감정</option>
+                                <option value="neutral">😌 차분한 감정</option>
+                                <option value="negative">😣 불편한 감정</option>
+                            </select>
                             <input id="search-input" type="text" placeholder="검색..." class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
                         </div>
                     </div>
-                    <div id="category-chips" class="flex flex-wrap gap-2 mb-6"></div>
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+                        <div id="category-chips" class="flex flex-wrap gap-2"></div>
+                        <div class="flex flex-wrap gap-2">
+                            <button id="favorites-filter" type="button" onclick="toggleFavoritesFilter()" class="px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 hover:border-amber-300 transition text-sm font-semibold">
+                                <i class="far fa-star mr-1"></i>즐겨찾기만
+                            </button>
+                            <button id="bulk-delete-button" type="button" onclick="bulkDeleteSelected()" disabled class="px-4 py-2 rounded-lg bg-white border border-red-200 text-red-600 disabled:opacity-40 transition text-sm font-semibold">
+                                <i class="fas fa-trash mr-1"></i>선택 삭제 <span id="selected-count">0</span>
+                            </button>
+                            <button type="button" onclick="document.getElementById('import-input').click()" class="px-4 py-2 rounded-lg bg-white border border-green-200 text-green-700 hover:bg-green-50 transition text-sm font-semibold">
+                                <i class="fas fa-file-import mr-1"></i>백업 복원
+                            </button>
+                            <input id="import-input" type="file" accept="application/json,.json" class="hidden">
+                        </div>
+                    </div>
                     
                     <div id="memories-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         <!-- Add Memory Card will be injected here -->
@@ -1828,6 +2211,12 @@ app.get('/', (c) => {
                                 </div>
 
                                 <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">태그</label>
+                                    <input type="text" id="tags" maxlength="200" placeholder="예: 가족, 제주도, 생일" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                    <p class="text-xs text-gray-400 mt-1">쉼표로 구분해 최대 10개까지 입력할 수 있습니다.</p>
+                                </div>
+
+                                <div>
                                     <label class="flex items-center space-x-2">
                                         <input type="checkbox" id="auto-analyze" checked class="rounded text-purple-600 focus:ring-purple-500">
                                         <span class="text-sm text-gray-700">
@@ -1873,6 +2262,38 @@ app.get('/', (c) => {
                         </div>
                     </div>
                 </div>
+
+                <!-- Importance Distribution Modal -->
+                <div id="importance-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" onclick="if(event.target === this) closeImportanceChart()">
+                    <section class="importance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="importance-chart-title">
+                        <header class="importance-modal-header">
+                            <div>
+                                <p>MEMORY INSIGHT</p>
+                                <h3 id="importance-chart-title">중요도 분포</h3>
+                            </div>
+                            <button type="button" onclick="closeImportanceChart()" aria-label="중요도 그래프 닫기"><i class="fas fa-times"></i></button>
+                        </header>
+                        <div id="importance-chart-content"></div>
+                    </section>
+                </div>
+
+                <nav class="mobile-bottom-nav" aria-label="모바일 주요 메뉴">
+                    <button type="button" data-mobile-view="dashboard" class="mobile-tab active" onclick="showView('dashboard')" aria-label="홈">
+                        <i class="fas fa-home" aria-hidden="true"></i><span>홈</span>
+                    </button>
+                    <button type="button" data-mobile-view="memories" class="mobile-tab" onclick="showView('memories')" aria-label="추억">
+                        <i class="fas fa-images" aria-hidden="true"></i><span>추억</span>
+                    </button>
+                    <button type="button" class="mobile-add-tab" onclick="showAddMemory()" aria-label="새 추억 추가">
+                        <i class="fas fa-plus" aria-hidden="true"></i><span>추가</span>
+                    </button>
+                    <button type="button" data-mobile-view="timeline" class="mobile-tab" onclick="showView('timeline')" aria-label="타임라인">
+                        <i class="fas fa-stream" aria-hidden="true"></i><span>타임라인</span>
+                    </button>
+                    <button type="button" class="mobile-tab" onclick="showRandomMemory()" aria-label="추억 다시보기">
+                        <i class="fas fa-shuffle" aria-hidden="true"></i><span>다시보기</span>
+                    </button>
+                </nav>
             </main>
         </div>
 
@@ -1886,10 +2307,15 @@ app.get('/', (c) => {
             let uploadedFileUrl = null;
             let localMode = false;
             let appListenersReady = false;
+            let favoritesOnly = false;
+            const selectedMemoryIds = new Set();
 
             const LOCAL_USER_KEY = 'memorylink_local_user';
             const LOCAL_MEMORIES_KEY = 'memorylink_local_memories';
             const LOCAL_DEMO_SEEDED_KEY = 'memorylink_demo_seeded';
+            const LOCAL_FAVORITES_KEY = 'memorylink_favorites';
+            const LOCAL_RECALL_SETTINGS_KEY = 'memorylink_recall_settings';
+            const LOCAL_RECALL_NOTICE_KEY = 'memorylink_recall_notice_date';
             const LOCAL_CATEGORIES = [
                 { id: 1, name: '사진', icon: '📷', color: '#3B82F6' },
                 { id: 2, name: '동영상', icon: '🎥', color: '#8B5CF6' },
@@ -1910,6 +2336,235 @@ app.get('/', (c) => {
 
             function saveLocalMemories(memories) {
                 localStorage.setItem(LOCAL_MEMORIES_KEY, JSON.stringify(memories));
+            }
+
+            function getFavoriteIds() {
+                try {
+                    return new Set(JSON.parse(localStorage.getItem(LOCAL_FAVORITES_KEY) || '[]').map(String));
+                } catch {
+                    return new Set();
+                }
+            }
+
+            function getRecallSettings() {
+                try {
+                    return {
+                        enabled: false,
+                        frequency: 'daily',
+                        time: '20:00',
+                        ...JSON.parse(localStorage.getItem(LOCAL_RECALL_SETTINGS_KEY) || '{}')
+                    };
+                } catch {
+                    return { enabled: false, frequency: 'daily', time: '20:00' };
+                }
+            }
+
+            function getRecallDate(memory) {
+                const value = memory.original_date || memory.created_at;
+                const date = new Date(value);
+                return Number.isNaN(date.getTime()) ? new Date() : date;
+            }
+
+            function getRecallReason(memory, today = new Date()) {
+                const memoryDate = getRecallDate(memory);
+                const sameDay = memoryDate.getMonth() === today.getMonth() && memoryDate.getDate() === today.getDate();
+                const years = Math.max(1, today.getFullYear() - memoryDate.getFullYear());
+                if (sameDay && memoryDate.getFullYear() < today.getFullYear()) return years + '년 전 오늘의 추억';
+                if (!memory.last_recalled_at) return '아직 다시 열어보지 않은 추억';
+                const unseenDays = Math.floor((today - new Date(memory.last_recalled_at)) / 86400000);
+                if (unseenDays >= 30) return unseenDays + '일 만에 다시 만나는 추억';
+                if (Number(memory.importance_score) >= 8) return '소중하게 표시한 중요한 추억';
+                if (memory.ai_sentiment === 'positive') return '기분 좋은 순간을 다시 떠올려 보세요';
+                if (memory.ai_sentiment === 'negative') return '시간이 지난 지금, 천천히 돌아볼 기억';
+                return '오늘의 기록과 잘 어울리는 추억';
+            }
+
+            function rankRecallMemories(memories) {
+                const today = new Date();
+                const daySeed = Number(String(today.getFullYear()) + String(today.getMonth() + 1) + String(today.getDate()));
+                return memories.map((memory, index) => {
+                    const memoryDate = getRecallDate(memory);
+                    const sameDay = memoryDate.getMonth() === today.getMonth() && memoryDate.getDate() === today.getDate();
+                    const lastSeen = memory.last_recalled_at ? new Date(memory.last_recalled_at) : null;
+                    const unseenDays = lastSeen ? Math.max(0, Math.floor((today - lastSeen) / 86400000)) : 90;
+                    const importance = Number(memory.importance_score) || 5;
+                    const rotation = ((Number(memory.id) || index + 1) * 17 + daySeed) % 13;
+                    return {
+                        ...enrichMemory(memory),
+                        recallReason: getRecallReason(memory, today),
+                        recallScore: (sameDay ? 120 : 0) + importance * 7 + Math.min(unseenDays, 90) + rotation
+                    };
+                }).sort((a, b) => b.recallScore - a.recallScore);
+            }
+
+            function recallEmotionLabel(memory) {
+                if (memory.ai_sentiment === 'positive') return '따뜻한 기억';
+                if (memory.ai_sentiment === 'negative') return '돌아볼 기억';
+                return '차분한 기억';
+            }
+
+            function renderRecallHub() {
+                const hub = document.getElementById('recall-hub');
+                if (!hub) return;
+                const memories = rankRecallMemories(getLocalMemories());
+                const settings = getRecallSettings();
+
+                if (!memories.length) {
+                    hub.innerHTML = \`
+                        <div class="recall-empty">
+                            <div><span>AI MEMORY RECALL</span><h3 id="recall-hub-title">첫 기억을 남겨주세요</h3><p>기록이 쌓이면 날짜와 감정, 중요도를 살펴 다시 만나기 좋은 순간을 골라드려요.</p></div>
+                            <button type="button" onclick="showAddMemory()"><i class="fas fa-plus"></i> 추억 남기기</button>
+                        </div>\`;
+                    return;
+                }
+
+                const todayMemories = memories.slice(0, 3);
+                const suggestions = memories.slice(3, 6);
+                hub.innerHTML = \`
+                    <div class="recall-collection-heading">
+                        <div><span>TODAY'S COLLECTION</span><h3>오늘 다시 만날 \${todayMemories.length}개의 기억</h3></div>
+                        <p>날짜와 감정, 중요도를 바탕으로 골랐어요.</p>
+                    </div>
+                    <div class="recall-box-grid">
+                        \${todayMemories.map((memory, index) => {
+                            const date = getRecallDate(memory);
+                            return \`
+                                <button type="button" class="recall-memory-box" onclick="openRecalledMemory(\${memory.id})">
+                                    <span class="recall-memory-box-copy">
+                                        <span class="recall-memory-box-top"><b>0\${index + 1}</b><em>\${memory.recallReason}</em><i class="fas fa-arrow-right"></i></span>
+                                        <strong id="\${index === 0 ? 'recall-hub-title' : ''}">\${escapeHtml(memory.title)}</strong>
+                                        <span class="recall-memory-summary">\${escapeHtml(memory.ai_summary || memory.description || '소중한 순간을 다시 천천히 떠올려 보세요.')}</span>
+                                        <span class="recall-memory-box-meta"><span>\${memory.category_icon || '✨'} \${date.toLocaleDateString('ko-KR')}</span><span>\${recallEmotionLabel(memory)}</span><span>중요도 \${memory.importance_score || 5}</span></span>
+                                    </span>
+                                </button>\`;
+                        }).join('')}
+                    </div>
+
+                    <div class="recall-lower-grid">
+                        <div class="recall-suggestions">
+                            <div class="recall-section-heading"><div><span>다음 추천</span><h4>이런 기억도 기다리고 있어요</h4></div><button type="button" onclick="refreshRecallRecommendations()" aria-label="추천 새로 고침"><i class="fas fa-rotate"></i></button></div>
+                            <div class="recall-suggestion-list">
+                                \${suggestions.map(memory => \`
+                                    <button type="button" class="recall-suggestion" onclick="openRecalledMemory(\${memory.id})">
+                                        <span class="recall-suggestion-icon">\${memory.category_icon || '✨'}</span>
+                                        <span><strong>\${escapeHtml(memory.title)}</strong><small>\${memory.recallReason}</small></span>
+                                        <i class="fas fa-chevron-right"></i>
+                                    </button>\`).join('')}
+                            </div>
+                        </div>
+                        <div class="recall-settings-card">
+                            <span class="recall-settings-icon"><i class="fas fa-bell"></i></span>
+                            <div><span>회상 알림</span><h4>잊기 전에 다시 만나요</h4><p>MemoryLink를 방문했을 때 설정한 주기에 맞춰 오늘의 기억을 알려드려요.</p></div>
+                            <label class="recall-toggle"><input id="recall-enabled" type="checkbox" \${settings.enabled ? 'checked' : ''}><span></span><b>\${settings.enabled ? '켜짐' : '꺼짐'}</b></label>
+                            <div class="recall-setting-row">
+                                <select id="recall-frequency" aria-label="회상 알림 주기">
+                                    <option value="daily" \${settings.frequency === 'daily' ? 'selected' : ''}>매일</option>
+                                    <option value="weekly" \${settings.frequency === 'weekly' ? 'selected' : ''}>매주</option>
+                                    <option value="monthly" \${settings.frequency === 'monthly' ? 'selected' : ''}>매월</option>
+                                </select>
+                                <input id="recall-time" type="time" value="\${settings.time}" aria-label="회상 알림 시간">
+                                <button type="button" onclick="saveRecallSettings()">저장</button>
+                            </div>
+                            <small id="recall-setting-status">\${settings.enabled ? \`다음 \${settings.frequency === 'daily' ? '매일' : settings.frequency === 'weekly' ? '매주' : '매월'} \${settings.time}에 안내\` : '알림이 꺼져 있습니다'}</small>
+                        </div>
+                    </div>\`;
+            }
+
+            function refreshRecallRecommendations() {
+                const memories = getLocalMemories();
+                const current = rankRecallMemories(memories)[0];
+                const index = current ? memories.findIndex(memory => String(memory.id) === String(current.id)) : -1;
+                if (index >= 0) {
+                    memories[index] = { ...memories[index], last_recalled_at: new Date().toISOString() };
+                    saveLocalMemories(memories);
+                }
+                renderRecallHub();
+            }
+
+            function openRecalledMemory(id) {
+                const memories = getLocalMemories();
+                const index = memories.findIndex(memory => String(memory.id) === String(id));
+                if (index >= 0) {
+                    memories[index] = {
+                        ...memories[index],
+                        last_recalled_at: new Date().toISOString(),
+                        recall_count: (Number(memories[index].recall_count) || 0) + 1
+                    };
+                    saveLocalMemories(memories);
+                }
+                showMemoryDetail(id);
+            }
+
+            async function saveRecallSettings() {
+                const enabled = document.getElementById('recall-enabled').checked;
+                const frequency = document.getElementById('recall-frequency').value;
+                const time = document.getElementById('recall-time').value || '20:00';
+                localStorage.setItem(LOCAL_RECALL_SETTINGS_KEY, JSON.stringify({ enabled, frequency, time }));
+
+                const status = document.getElementById('recall-setting-status');
+                if (enabled && 'Notification' in window && Notification.permission === 'default') {
+                    const permission = await Notification.requestPermission();
+                    status.textContent = permission === 'granted'
+                        ? '브라우저 알림이 허용되었습니다.'
+                        : '앱 안에서 오늘의 기억을 안내합니다.';
+                } else {
+                    status.textContent = enabled ? '회상 알림 설정을 저장했습니다.' : '회상 알림을 껐습니다.';
+                }
+                renderRecallHub();
+                maybeShowRecallNotice();
+            }
+
+            function maybeShowRecallNotice() {
+                const settings = getRecallSettings();
+                if (!settings.enabled) return;
+                const now = new Date();
+                const todayKey = now.toISOString().slice(0, 10);
+                const lastNotice = localStorage.getItem(LOCAL_RECALL_NOTICE_KEY);
+                if (lastNotice === todayKey) return;
+                const [hour, minute] = settings.time.split(':').map(Number);
+                if (now.getHours() < hour || (now.getHours() === hour && now.getMinutes() < minute)) return;
+                if (settings.frequency === 'weekly' && now.getDay() !== 0) return;
+                if (settings.frequency === 'monthly' && now.getDate() !== 1) return;
+
+                const featured = rankRecallMemories(getLocalMemories())[0];
+                if (!featured) return;
+                localStorage.setItem(LOCAL_RECALL_NOTICE_KEY, todayKey);
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('오늘 다시 만날 기억', { body: featured.title + ' — ' + featured.recallReason });
+                }
+            }
+
+            function toggleFavorite(id, event) {
+                event?.stopPropagation();
+                const favorites = getFavoriteIds();
+                const key = String(id);
+                favorites.has(key) ? favorites.delete(key) : favorites.add(key);
+                localStorage.setItem(LOCAL_FAVORITES_KEY, JSON.stringify([...favorites]));
+                loadMemories();
+            }
+
+            function toggleFavoritesFilter() {
+                favoritesOnly = !favoritesOnly;
+                currentPage = 1;
+                const button = document.getElementById('favorites-filter');
+                button.classList.toggle('bg-amber-50', favoritesOnly);
+                button.classList.toggle('text-amber-700', favoritesOnly);
+                button.innerHTML = favoritesOnly
+                    ? '<i class="fas fa-star mr-1"></i>즐겨찾기 전체'
+                    : '<i class="far fa-star mr-1"></i>즐겨찾기만';
+                loadMemories();
+            }
+
+            function toggleMemorySelection(id, event) {
+                event?.stopPropagation();
+                const key = String(id);
+                selectedMemoryIds.has(key) ? selectedMemoryIds.delete(key) : selectedMemoryIds.add(key);
+                updateBulkSelection();
+            }
+
+            function updateBulkSelection() {
+                document.getElementById('selected-count').textContent = selectedMemoryIds.size;
+                document.getElementById('bulk-delete-button').disabled = selectedMemoryIds.size === 0;
             }
 
             function removeGraduationSampleText() {
@@ -2014,7 +2669,7 @@ app.get('/', (c) => {
                 const lower = text.toLowerCase();
                 const hasImage = data.file_type && data.file_type.startsWith('image');
                 const positiveWords = ['\uD589\uBCF5', '\uAE30\uC068', '\uC0AC\uB791', '\uC990\uAC70', '\uAC10\uC0AC', '\uC18C\uC911', '\uC6C3\uC74C', '\uC88B', '\uCD5C\uACE0', '\uC124\uB818'];
-                const negativeWords = ['\uC2AC\uD514', '\uC544\uD514', '\uD798\uB4E4', '\uADF8\uB9BD', '\uC678\uB85C', '\uAC71\uC815', '\uD6C4\uD68C', '\uB208\uBB3C', '\uBBF8\uC548'];
+                const negativeWords = ['슬픔', '아픔', '힘들', '그립', '외로', '걱정', '후회', '눈물', '미안', '기분 나쁘', '기분이 나빴', '불쾌', '불편', '속상', '짜증', '화남', '화가', '분노', '실망', '싫', '무서', '두려'];
                 const positiveScore = positiveWords.filter(function(word) { return lower.includes(word); }).length;
                 const negativeScore = negativeWords.filter(function(word) { return lower.includes(word); }).length;
                 const sentiment = positiveScore > negativeScore ? 'positive' : negativeScore > positiveScore ? 'negative' : 'neutral';
@@ -2030,9 +2685,15 @@ app.get('/', (c) => {
                     : sentiment === 'negative' ? '\uCC28\uBD84\uD558\uACE0 \uADF8\uB9AC\uC6C0\uC774 \uB290\uAEF4\uC9C0\uB294 \uBD84\uC704\uAE30'
                     : hasImage ? '\uC794\uC794\uD558\uACE0 \uC790\uC5F0\uC2A4\uB7EC\uC6B4 \uBD84\uC704\uAE30'
                     : '\uB2F4\uBC31\uD558\uAC8C \uC815\uB9AC\uB41C \uBD84\uC704\uAE30';
-                const feltEmotion = sentiment === 'positive' ? '\uC18C\uC911\uD568\uACFC \uAE30\uBD84 \uC88B\uC740 \uC124\uB818'
-                    : sentiment === 'negative' ? '\uADF8\uB9AC\uC6C0\uACFC \uC544\uC26C\uC6C0'
-                    : '\uD3B8\uC548\uD568\uACFC \uCC28\uBD84\uD568';
+                const feltEmotion = lower.includes('기분 나쁘') || lower.includes('기분이 나빴') || lower.includes('불쾌') || lower.includes('싫') ? '기분 나쁨과 불쾌함'
+                    : lower.includes('불편') || lower.includes('속상') ? '불편함과 속상함'
+                    : lower.includes('짜증') || lower.includes('화남') || lower.includes('화가') || lower.includes('분노') ? '화남과 답답함'
+                    : lower.includes('실망') || lower.includes('후회') ? '실망과 아쉬움'
+                    : lower.includes('무서') || lower.includes('두려') || lower.includes('걱정') ? '걱정과 두려움'
+                    : lower.includes('설렘') ? '기분 좋은 설렘'
+                    : lower.includes('편안') || lower.includes('차분') ? '편안함과 차분함'
+                    : sentiment === 'positive' ? '소중함과 기분 좋은 설렘'
+                    : sentiment === 'negative' ? '그리움과 아쉬움' : '편안함과 차분함';
                 const firstSentence = text.split(/[.!?\u3002\uFF01\uFF1F]/)[0] || text;
                 const summary = firstSentence ? (firstSentence.length > 90 ? firstSentence.slice(0, 90) + '...' : firstSentence) : '\uCD94\uC5B5\uC758 \uB0B4\uC6A9\uC744 \uBD84\uC11D\uD588\uC2B5\uB2C8\uB2E4.';
 
@@ -2098,6 +2759,15 @@ app.get('/', (c) => {
                         file_url: null,
                         tags: ['SNS', '새학기', '다짐'],
                         importance_score: 4
+                    },
+                    {
+                        title: '불쾌했던 단체 채팅',
+                        category_id: 4,
+                        description: '오해가 생겨 기분이 나빴던 단체 채팅 기록',
+                        content: '내 말을 끝까지 듣지 않고 오해하는 메시지가 이어져 불쾌하고 속상했습니다.',
+                        file_url: null,
+                        tags: ['단체채팅', '오해', '속상함'],
+                        importance_score: 3
                     }
                 ];
 
@@ -2120,8 +2790,8 @@ app.get('/', (c) => {
             function ensureDemoMemories() {
                 const demoAlreadySeeded = localStorage.getItem(LOCAL_DEMO_SEEDED_KEY) === '1';
                 const existing = getLocalMemories();
-                if (demoAlreadySeeded && existing.length >= 5) return;
-                if (existing.length >= 5) {
+                if (demoAlreadySeeded && existing.length >= 6) return;
+                if (existing.length >= 6) {
                     localStorage.setItem(LOCAL_DEMO_SEEDED_KEY, '1');
                     return;
                 }
@@ -2129,7 +2799,7 @@ app.get('/', (c) => {
                 const existingTitles = new Set(existing.map(function(memory) { return memory.title; }));
                 const missingSamples = createDemoMemorySamples()
                     .filter(function(memory) { return !existingTitles.has(memory.title); })
-                    .slice(0, 5 - existing.length);
+                    .slice(0, 6 - existing.length);
 
                 if (missingSamples.length > 0) {
                     saveLocalMemories(existing.concat(missingSamples));
@@ -2142,6 +2812,49 @@ app.get('/', (c) => {
                     '<h4 class="text-sm font-semibold text-' + color + '-900 mb-2"><i class="fas ' + icon + ' mr-2"></i>' + title + '</h4>' +
                     '<p class="text-' + color + '-800 text-sm">' + escapeHtml(body) + '</p>' +
                     '</div>';
+            }
+
+            function getEmotionPresentation(memory) {
+                const detail = String(memory.ai_felt_emotion || '').trim();
+                const sentiment = memory.ai_sentiment || 'neutral';
+                const source = detail + ' ' + String(memory.ai_atmosphere || '');
+                let label = sentiment === 'positive' ? '행복' : sentiment === 'negative' ? '그리움' : '차분함';
+                let emoji = sentiment === 'positive' ? '😊' : sentiment === 'negative' ? '😢' : '😌';
+
+                const emotionRules = [
+                    ['설렘', '설렘', '✨'], ['사랑', '사랑', '🥰'], ['소중', '소중함', '💛'],
+                    ['행복', '행복', '😊'], ['기쁨', '기쁨', '😄'], ['뿌듯', '뿌듯함', '🌟'],
+                    ['기분 나쁨', '기분 나쁨', '😣'], ['불쾌', '불쾌함', '😖'], ['화남', '화남', '😠'],
+                    ['분노', '분노', '😡'], ['짜증', '짜증', '😤'], ['실망', '실망', '😞'], ['불편', '불편함', '😕'], ['속상', '속상함', '😥'],
+                    ['두려움', '두려움', '😨'], ['그리움', '그리움', '🥹'], ['아쉬움', '아쉬움', '😔'],
+                    ['슬픔', '슬픔', '😢'], ['걱정', '걱정', '😟'], ['편안', '편안함', '😌'], ['차분', '차분함', '🌿']
+                ];
+                emotionRules.some(function(rule) {
+                    if (!source.includes(rule[0])) return false;
+                    label = rule[1]; emoji = rule[2]; return true;
+                });
+
+                const confidence = Math.round(Math.max(0, Math.min(1, Number(memory.ai_confidence) || 0.55)) * 100);
+                return { label, emoji, detail: detail || label + '이 느껴지는 추억', sentiment, confidence };
+            }
+
+            function renderEmotionPill(memory) {
+                if (!memory.ai_sentiment && !memory.ai_felt_emotion) return '';
+                const emotion = getEmotionPresentation(memory);
+                return '<div class="memory-emotion-pill emotion-' + emotion.sentiment + '" title="AI 감정 분석: ' + escapeHtml(emotion.detail) + '">' +
+                    '<span aria-hidden="true">' + emotion.emoji + '</span><span>AI 감정 · ' + escapeHtml(emotion.label) + '</span>' +
+                '</div>';
+            }
+
+            function renderEmotionSpotlight(memory) {
+                if (!memory.ai_sentiment && !memory.ai_felt_emotion) return '';
+                const emotion = getEmotionPresentation(memory);
+                return '<section class="ai-emotion-spotlight emotion-' + emotion.sentiment + '" aria-label="AI 감정 분석 결과">' +
+                    '<div class="ai-emotion-heading"><span class="ai-emotion-eyebrow"><i class="fas fa-brain"></i> AI 감정 분석</span><span class="ai-emotion-confidence">확신도 ' + emotion.confidence + '%</span></div>' +
+                    '<div class="ai-emotion-result"><span class="ai-emotion-emoji" aria-hidden="true">' + emotion.emoji + '</span><div><p class="ai-emotion-label">' + escapeHtml(emotion.label) + '</p><p class="ai-emotion-detail">' + escapeHtml(emotion.detail) + '</p></div></div>' +
+                    '<div class="ai-emotion-meter" aria-label="분석 확신도 ' + emotion.confidence + '%"><span style="width:' + emotion.confidence + '%"></span></div>' +
+                    '<p class="ai-emotion-basis"><strong>판단 근거</strong> ' + escapeHtml(memory.ai_atmosphere || memory.ai_image_observations || '기록의 제목과 설명에서 느껴지는 표현을 분석했습니다.') + '</p>' +
+                '</section>';
             }
 
             function renderAIInsightBlocks(memory) {
@@ -2194,17 +2907,30 @@ app.get('/', (c) => {
                     count: memories.filter(memory => Number(memory.category_id) === cat.id).length
                 })).sort((a, b) => b.count - a.count);
 
+                const sentimentCounts = memories.reduce((acc, memory) => {
+                    const key = memory.ai_sentiment || 'neutral';
+                    acc[key] = (acc[key] || 0) + 1;
+                    return acc;
+                }, {});
+
                 return {
                     total: memories.length,
                     byCategory,
                     recent: memories.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5),
-                    sentiments: []
+                    sentiments: Object.entries(sentimentCounts).map(([ai_sentiment, count]) => ({ ai_sentiment, count })),
+                    importance: Array.from({ length: 10 }, (_, index) => ({
+                        score: index + 1,
+                        count: memories.filter(memory => Math.round(Number(memory.importance_score) || 5) === index + 1).length
+                    }))
                 };
             }
 
             function getLocalPage() {
                 const category = document.getElementById('category-filter').value;
                 const search = document.getElementById('search-input').value.trim().toLowerCase();
+                const sort = document.getElementById('sort-filter').value;
+                const emotion = document.getElementById('emotion-filter').value;
+                const favoriteIds = getFavoriteIds();
                 const limit = 12;
                 let data = getLocalMemories().map(enrichMemory);
 
@@ -2213,13 +2939,26 @@ app.get('/', (c) => {
                 }
                 if (search) {
                     data = data.filter(memory =>
-                        [memory.title, memory.description, memory.content].some(value =>
+                        [memory.title, memory.description, memory.content, ...safeJsonList(memory.tags)].some(value =>
                             String(value || '').toLowerCase().includes(search)
                         )
                     );
                 }
 
-                data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                if (favoritesOnly) {
+                    data = data.filter(memory => favoriteIds.has(String(memory.id)));
+                }
+                if (emotion) {
+                    data = data.filter(memory => String(memory.ai_sentiment || 'neutral') === emotion);
+                }
+
+                const dateOf = memory => new Date(memory.original_date || memory.created_at || 0).getTime();
+                data.sort((a, b) => {
+                    if (sort === 'oldest') return dateOf(a) - dateOf(b);
+                    if (sort === 'importance') return Number(b.importance_score || 0) - Number(a.importance_score || 0) || dateOf(b) - dateOf(a);
+                    if (sort === 'title') return String(a.title || '').localeCompare(String(b.title || ''), 'ko');
+                    return dateOf(b) - dateOf(a);
+                });
                 const total = data.length;
                 const start = (currentPage - 1) * limit;
                 return {
@@ -2351,7 +3090,8 @@ app.get('/', (c) => {
             function showLogin() {
                 document.getElementById('login-form').classList.remove('hidden');
                 document.getElementById('register-form').classList.add('hidden');
-                document.getElementById('auth-title').textContent = '로그인';
+                document.getElementById('auth-title').dataset.mode = 'login';
+                document.getElementById('auth-title').setAttribute('aria-label', 'MemoryLink 로그인');
                 document.getElementById('login-email').focus();
             }
 
@@ -2359,7 +3099,8 @@ app.get('/', (c) => {
                 document.getElementById('login-form').classList.add('hidden');
                 document.getElementById('register-form').classList.remove('hidden');
                 document.getElementById('register-success-message').classList.add('hidden');
-                document.getElementById('auth-title').textContent = '회원가입';
+                document.getElementById('auth-title').dataset.mode = 'register';
+                document.getElementById('auth-title').setAttribute('aria-label', 'MemoryLink 회원가입');
                 document.getElementById('register-name').focus();
             }
 
@@ -2469,6 +3210,18 @@ app.get('/', (c) => {
                     renderCategoryChips();
                     loadMemories();
                 });
+
+                document.getElementById('sort-filter').addEventListener('change', () => {
+                    currentPage = 1;
+                    loadMemories();
+                });
+
+                document.getElementById('emotion-filter').addEventListener('change', () => {
+                    currentPage = 1;
+                    loadMemories();
+                });
+
+                document.getElementById('import-input').addEventListener('change', importData);
                 
                 document.getElementById('search-input').addEventListener('input', debounce(() => {
                     currentPage = 1;
@@ -2725,6 +3478,8 @@ app.get('/', (c) => {
 
             async function loadStatistics() {
                 try {
+                    renderRecallHub();
+                    maybeShowRecallNotice();
                     const stats = localMode ? getLocalStats() : (await axios.get(\`\${API_BASE}/statistics\`)).data;
                     
                     document.getElementById('total-memories').textContent = stats.total;
@@ -2735,6 +3490,10 @@ app.get('/', (c) => {
                     }, {});
                     document.getElementById('positive-memories').textContent = sentiments.positive || 0;
                     document.getElementById('neutral-memories').textContent = sentiments.neutral || 0;
+                    const importance = normalizeImportanceStats(stats.importance);
+                    const importanceTotal = importance.reduce((sum, item) => sum + item.count, 0);
+                    const importanceSum = importance.reduce((sum, item) => sum + (item.score * item.count), 0);
+                    document.getElementById('avg-importance').textContent = importanceTotal ? (importanceSum / importanceTotal).toFixed(1) : '0';
                     
                     const categoriesChart = document.getElementById('categories-chart');
                     const categoryStats = stats.byCategory || [];
@@ -2852,8 +3611,15 @@ app.get('/', (c) => {
 
             function renderMemoryCards(data, pagination) {
                 const grid = document.getElementById('memories-grid');
+                const favoriteIds = getFavoriteIds();
                 grid.innerHTML = data.length ? data.map(memory => \`
-                    <div class="memory-card bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer" onclick="showMemoryDetail(\${memory.id})">
+                    <div class="memory-card relative bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer" onclick="showMemoryDetail(\${memory.id})">
+                        <label class="absolute top-3 left-3 z-10 w-9 h-9 rounded-full bg-white/95 shadow flex items-center justify-center cursor-pointer" title="선택" onclick="event.stopPropagation()">
+                            <input type="checkbox" class="w-4 h-4 accent-purple-600" \${selectedMemoryIds.has(String(memory.id)) ? 'checked' : ''} onchange="toggleMemorySelection(\${memory.id}, event)">
+                        </label>
+                        <button type="button" onclick="toggleFavorite(\${memory.id}, event)" class="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/95 shadow text-amber-500 hover:scale-110 transition" aria-label="즐겨찾기 전환">
+                            <i class="\${favoriteIds.has(String(memory.id)) ? 'fas' : 'far'} fa-star"></i>
+                        </button>
                         \${memory.file_url ?
                             (memory.file_type?.startsWith('image') ?
                                 \`<img src="\${memory.file_url}" alt="\${memory.title}" onerror="this.src='https://via.placeholder.com/400x200?text=이미지+로드+실패'">\` :
@@ -2873,11 +3639,28 @@ app.get('/', (c) => {
                                 </div>
                             </div>
                             <p class="text-sm text-gray-600 mb-3 line-clamp-2">\${memory.description || memory.ai_summary || ''}</p>
+                            \${renderEmotionPill(memory)}
+                            \${safeJsonList(memory.tags).length ? \`
+                                <div class="flex flex-wrap gap-1 mb-3">
+                                    \${safeJsonList(memory.tags).slice(0, 3).map(tag => \`<span class="px-2 py-1 bg-slate-100 text-slate-600 rounded-full text-xs">#\${escapeHtml(tag)}</span>\`).join('')}
+                                </div>
+                            \` : ''}
                             <div class="flex items-center justify-between text-xs">
                                 <span class="text-gray-500">\${new Date(memory.created_at).toLocaleDateString('ko-KR')}</span>
                                 <span class="category-badge px-2 py-1 rounded-full text-xs" style="background-color: \${memory.category_color}20; color: \${memory.category_color}">
                                     \${memory.category_name || '미분류'}
                                 </span>
+                            </div>
+                            <div class="memory-card-actions" onclick="event.stopPropagation()">
+                                <button type="button" class="memory-icon-button memory-edit-button" onclick="editMemory(\${memory.id})" aria-label="\${escapeHtml(memory.title)} 수정" title="수정">
+                                    <i class="fas fa-edit" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="memory-icon-button memory-duplicate-button" onclick="duplicateMemory(\${memory.id})" aria-label="\${escapeHtml(memory.title)} 복제" title="복제">
+                                    <i class="fas fa-copy" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="memory-icon-button memory-delete-button" onclick="deleteMemory(\${memory.id})" aria-label="\${escapeHtml(memory.title)} 삭제" title="삭제">
+                                    <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -2889,6 +3672,7 @@ app.get('/', (c) => {
                     </div>
                 \`;
                 renderPagination(pagination);
+                updateBulkSelection();
             }
 
             async function loadMemories() {
@@ -3066,18 +3850,14 @@ app.get('/', (c) => {
                                     <p class="text-sm text-gray-500">\${new Date(memory.created_at).toLocaleDateString('ko-KR')}</p>
                                 </div>
                             </div>
-                            <div class="flex space-x-2">
-                                <button onclick="editMemory(\${memory.id})" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button onclick="deleteMemory(\${memory.id})" class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                            <div class="flex">
                                 <button onclick="closeDetailModal()" class="p-2 text-gray-500 hover:bg-gray-50 rounded-lg transition">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
+
+                        \${renderEmotionSpotlight(memory)}
                         
                         \${memory.file_url ? \`
                             <div class="mb-6">
@@ -3104,14 +3884,6 @@ app.get('/', (c) => {
                                     <span class="text-gray-700 font-medium">중요도:</span>
                                     <span class="ml-2">\${Array(memory.importance_score || 5).fill('⭐').join('')}</span>
                                 </div>
-                                \${memory.ai_sentiment ? \`
-                                    <div>
-                                        <span class="text-gray-700 font-medium">감정:</span>
-                                        <span class="ml-2 px-2 py-1 rounded-full text-xs \${memory.ai_sentiment === 'positive' ? 'bg-green-100 text-green-700' : memory.ai_sentiment === 'negative' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}">
-                                            \${memory.ai_sentiment === 'positive' ? '😊 긍정' : memory.ai_sentiment === 'negative' ? '😢 부정' : '😐 중립'}
-                                        </span>
-                                    </div>
-                                \` : ''}
                             </div>
                             
                             \${memory.ai_summary ? \`
@@ -3177,6 +3949,13 @@ app.get('/', (c) => {
                                     <button onclick="closeDetailModal()" class="p-2 text-gray-500 hover:bg-gray-50 rounded-lg transition"><i class="fas fa-times"></i></button>
                                 </div>
                             </div>
+
+                            \${safeJsonList(memory.tags).length ? \`
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-700 mb-2">태그</h4>
+                                    <div class="flex flex-wrap gap-2">\${safeJsonList(memory.tags).map(tag => \`<span class="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs">#\${escapeHtml(tag)}</span>\`).join('')}</div>
+                                </div>
+                            \` : ''}
                             \${memory.file_url ? \`<div class="mb-6">\${memory.file_type?.startsWith('image') ? \`<img src="\${memory.file_url}" alt="\${memory.title}" class="w-full rounded-lg shadow-lg">\` : \`<video src="\${memory.file_url}" controls class="w-full rounded-lg shadow-lg"></video>\`}</div>\` : ''}
                             <div class="space-y-4">
                                 <div><h4 class="text-sm font-semibold text-gray-700 mb-2">설명</h4><p class="text-gray-600">\${memory.description || '없음'}</p></div>
@@ -3194,6 +3973,89 @@ app.get('/', (c) => {
             function closeDetailModal() {
                 document.getElementById('detail-modal').classList.add('hidden');
                 document.getElementById('detail-modal').classList.remove('flex');
+            }
+
+            function normalizeImportanceStats(items) {
+                const counts = Array(10).fill(0);
+                (items || []).forEach(item => {
+                    const score = Math.min(10, Math.max(1, Math.round(Number(item.score) || 5)));
+                    counts[score - 1] += Number(item.count) || 0;
+                });
+                return counts.map((count, index) => ({ score: index + 1, count }));
+            }
+
+            async function showImportanceChart() {
+                try {
+                    const stats = localMode ? getLocalStats() : (await axios.get(API_BASE + '/statistics')).data;
+                    const importance = normalizeImportanceStats(stats.importance);
+                    const total = importance.reduce((sum, item) => sum + item.count, 0);
+                    const weighted = importance.reduce((sum, item) => sum + item.score * item.count, 0);
+                    const average = total ? weighted / total : 0;
+                    const peak = importance.reduce((best, item) => item.count > best.count ? item : best, importance[0]);
+                    const maxCount = Math.max(1, ...importance.map(item => item.count));
+                    const chart = document.getElementById('importance-chart-content');
+
+                    chart.innerHTML = \`
+                        <div class="importance-summary">
+                            <div><span>평균 중요도</span><strong>\${average.toFixed(1)}<small>/ 10</small></strong></div>
+                            <div><span>분석한 추억</span><strong>\${total}<small>개</small></strong></div>
+                            <div><span>가장 많은 점수</span><strong>\${total ? peak.score : '-'}<small>\${total ? '점' : ''}</small></strong></div>
+                        </div>
+                        \${total ? \`
+                            <div class="importance-chart-bars" role="img" aria-label="중요도 1점부터 10점까지의 추억 개수 막대 그래프">
+                                \${importance.map(item => \`
+                                    <div class="importance-bar-item" title="\${item.score}점: \${item.count}개">
+                                        <span class="importance-bar-count">\${item.count || ''}</span>
+                                        <div class="importance-bar-track"><span style="height:\${item.count ? Math.max(8, Math.round(item.count / maxCount * 100)) : 0}%"></span></div>
+                                        <b>\${item.score}</b>
+                                    </div>
+                                \`).join('')}
+                            </div>
+                            <p class="importance-axis-label">중요도 점수</p>
+                        \` : \`<div class="importance-empty"><i class="fas fa-chart-bar"></i><p>아직 분석할 추억이 없습니다.</p><span>추억을 추가하고 중요도를 설정해 보세요.</span></div>\`}
+                    \`;
+                    document.getElementById('importance-modal').classList.remove('hidden');
+                    document.getElementById('importance-modal').classList.add('flex');
+                } catch (error) {
+                    console.error('Error loading importance chart:', error);
+                    alert('중요도 그래프를 불러오지 못했습니다.');
+                }
+            }
+
+            function closeImportanceChart() {
+                document.getElementById('importance-modal').classList.add('hidden');
+                document.getElementById('importance-modal').classList.remove('flex');
+            }
+
+            function showRandomMemory() {
+                const memories = getLocalMemories();
+                if (!memories.length) {
+                    alert('다시 볼 추억이 없습니다. 먼저 추억을 추가해 주세요.');
+                    return;
+                }
+                const memory = memories[Math.floor(Math.random() * memories.length)];
+                showMemoryDetail(memory.id);
+            }
+
+            function duplicateMemory(id) {
+                const memories = getLocalMemories();
+                const original = memories.find(memory => String(memory.id) === String(id));
+                if (!original) {
+                    alert('복제할 추억을 찾지 못했습니다.');
+                    return;
+                }
+                const now = new Date().toISOString();
+                const copy = {
+                    ...original,
+                    id: Date.now(),
+                    title: \`\${original.title} (복사본)\`,
+                    created_at: now,
+                    updated_at: now
+                };
+                saveLocalMemories([copy, ...memories]);
+                closeDetailModal();
+                showView('memories');
+                alert('추억을 복제했습니다.');
             }
 
             let fabMenuOpen = false;
@@ -3272,6 +4134,7 @@ app.get('/', (c) => {
                     document.getElementById('category').value = memory.category_id || '';
                     document.getElementById('description').value = memory.description || '';
                     document.getElementById('content').value = memory.content || '';
+                    document.getElementById('tags').value = safeJsonList(memory.tags).join(', ');
                     document.getElementById('file-url').value = memory.file_url || '';
                     document.getElementById('importance-score').value = memory.importance_score || 5;
                     document.getElementById('importance-value').textContent = memory.importance_score || 5;
@@ -3302,6 +4165,7 @@ app.get('/', (c) => {
                         document.getElementById('category').value = memory.category_id || '';
                         document.getElementById('description').value = memory.description || '';
                         document.getElementById('content').value = memory.content || '';
+                        document.getElementById('tags').value = safeJsonList(memory.tags).join(', ');
                         document.getElementById('file-url').value = memory.file_url || '';
                         document.getElementById('importance-score').value = memory.importance_score || 5;
                         document.getElementById('importance-value').textContent = memory.importance_score || 5;
@@ -3325,6 +4189,7 @@ app.get('/', (c) => {
                     category_id: document.getElementById('category').value ? parseInt(document.getElementById('category').value) : null,
                     description: document.getElementById('description').value,
                     content: document.getElementById('content').value,
+                    tags: [...new Set(document.getElementById('tags').value.split(',').map(tag => tag.trim()).filter(Boolean))].slice(0, 10),
                     file_url: fileUrl || null,
                     file_type: fileUrl ? ((fileUrl.match(/\\.(jpg|jpeg|png|gif|webp)(\\?|$)/i) || fileUrl.includes('images.unsplash.com') || document.getElementById('category').value === '1') ? 'image' : 'video') : null,
                     importance_score: parseInt(document.getElementById('importance-score').value),
@@ -3401,10 +4266,68 @@ app.get('/', (c) => {
                 }
             }
 
+            async function bulkDeleteSelected() {
+                if (!selectedMemoryIds.size) return;
+                if (!confirm(\`선택한 \${selectedMemoryIds.size}개의 추억을 삭제하시겠습니까?\`)) return;
+
+                const selected = new Set(selectedMemoryIds);
+                saveLocalMemories(getLocalMemories().filter(memory => !selected.has(String(memory.id))));
+                localStorage.setItem(LOCAL_FAVORITES_KEY, JSON.stringify([...getFavoriteIds()].filter(id => !selected.has(String(id)))));
+                selectedMemoryIds.clear();
+                currentPage = 1;
+                updateBulkSelection();
+                await loadMemories();
+                await loadStatistics();
+                alert('선택한 추억을 삭제했습니다.');
+            }
+
+            async function importData(event) {
+                const input = event.target;
+                const file = input.files?.[0];
+                if (!file) return;
+                try {
+                    if (file.size > 25 * 1024 * 1024) throw new Error('백업 파일은 25MB 이하여야 합니다.');
+                    const parsed = JSON.parse(await file.text());
+                    const imported = Array.isArray(parsed) ? parsed : parsed.memories;
+                    if (!Array.isArray(imported)) throw new Error('memories 배열이 없는 백업 파일입니다.');
+                    const valid = imported.filter(memory => memory && typeof memory.title === 'string' && memory.title.trim());
+                    if (!valid.length) throw new Error('복원할 수 있는 추억이 없습니다.');
+                    if (!confirm(\`백업에서 \${valid.length}개의 추억을 가져옵니다. 기존 자료와 합칠까요?\`)) return;
+
+                    const existing = getLocalMemories();
+                    const known = new Set(existing.map(memory => String(memory.id)));
+                    const now = Date.now();
+                    const normalized = valid.map((memory, index) => {
+                        const candidateId = String(memory.id || '');
+                        const id = candidateId && !known.has(candidateId) ? memory.id : now + index;
+                        known.add(String(id));
+                        return {
+                            ...memory,
+                            id,
+                            title: memory.title.trim(),
+                            importance_score: Math.min(10, Math.max(1, Number(memory.importance_score) || 5)),
+                            created_at: memory.created_at || new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        };
+                    });
+                    saveLocalMemories([...normalized, ...existing]);
+                    currentPage = 1;
+                    await loadMemories();
+                    await loadStatistics();
+                    alert(\`\${normalized.length}개의 추억을 복원했습니다.\`);
+                } catch (error) {
+                    console.error('Error importing data:', error);
+                    alert(error.message || '백업 파일을 복원하지 못했습니다.');
+                } finally {
+                    input.value = '';
+                }
+            }
+
             async function exportData() {
                 try {
-                    const response = await axios.get(\`\${API_BASE}/export\`);
-                    const data = response.data;
+                    const data = localMode
+                        ? { version: '3.6.0', exported_at: new Date().toISOString(), memories: getLocalMemories(), favorite_ids: [...getFavoriteIds()] }
+                        : (await axios.get(\`\${API_BASE}/export\`)).data;
                     
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
@@ -3431,6 +4354,11 @@ app.get('/', (c) => {
                 document.getElementById('dashboard-view').classList.toggle('hidden', view !== 'dashboard');
                 document.getElementById('memories-view').classList.toggle('hidden', view !== 'memories');
                 document.getElementById('timeline-view').classList.toggle('hidden', view !== 'timeline');
+                document.querySelectorAll('[data-mobile-view]').forEach(function(button) {
+                    const selected = button.dataset.mobileView === view;
+                    button.classList.toggle('active', selected);
+                    button.setAttribute('aria-current', selected ? 'page' : 'false');
+                });
                 
                 if (view === 'memories') {
                     loadMemories();
@@ -3454,6 +4382,13 @@ app.get('/', (c) => {
             }
 
             // Initialize on page load
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js').catch(function(error) {
+                        console.warn('Service worker registration skipped:', error);
+                    });
+                });
+            }
             showAuthContainer();
             showRegister();
         </script>
@@ -3463,3 +4398,9 @@ app.get('/', (c) => {
 })
 
 export default app
+
+
+
+
+
+

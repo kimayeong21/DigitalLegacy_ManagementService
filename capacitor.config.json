@@ -1,0 +1,9 @@
+{
+  "appId": "kr.memorylink.app",
+  "appName": "MemoryLink",
+  "webDir": "android-web",
+  "android": {
+    "backgroundColor": "#171612",
+    "allowMixedContent": false
+  }
+}
