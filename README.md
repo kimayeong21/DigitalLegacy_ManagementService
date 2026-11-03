@@ -251,6 +251,3 @@ Google Drive 연동과 OpenAI 분석은 각 서비스의 인증 정보가 설정
 - 포트폴리오: [Ayeong Kim Portfolio](https://kimayeong21.github.io/DNights.github.io/)
 - 이메일: [cngot0000@naver.com](mailto:cngot0000@naver.com)
 
-## 라이선스 및 이용 안내
-
-이 저장소는 졸업작품 개발과 시연을 위한 프로젝트입니다. 외부 배포나 상용 사용 전에는 사용 중인 API, 폰트, 아이콘과 라이브러리의 라이선스를 확인해야 합니다.
