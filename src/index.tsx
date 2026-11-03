@@ -4389,8 +4389,12 @@ app.get('/', (c) => {
                     ['fa-paper-plane', memories.filter(function(item){return legacyStatusOf(item) === 'transfer';}).length + '개의 전달 예정 유품', '수신인과 전달 조건을 확인하세요', "showView('transfer')"]
                 ].map(function(item){return '<div class="legacy-task"><i class="fas ' + item[0] + '"></i><div><strong>' + item[1] + '</strong><small>' + item[2] + '</small></div><button onclick="' + item[3] + '">열기</button></div>';}).join('');
 
-                const customFolders = JSON.parse(localStorage.getItem(LOCAL_CUSTOM_FOLDERS_KEY) || '[]');
-                const folderData = LOCAL_CATEGORIES.slice(0, 5).map(function(cat){ return { name: cat.name, count: memories.filter(function(item){return Number(item.category_id) === cat.id;}).length }; }).concat(customFolders);
+                const builtInFolders = LOCAL_CATEGORIES.slice(0, 5);
+                const builtInNames = new Set(builtInFolders.map(function(cat){ return cat.name; }));
+                const customFolders = JSON.parse(localStorage.getItem(LOCAL_CUSTOM_FOLDERS_KEY) || '[]')
+                    .filter(function(folder){ return folder && folder.name && !builtInNames.has(folder.name); })
+                    .map(function(folder){ return { ...folder, count: memories.filter(function(item){ return item.folder_name === folder.name; }).length }; });
+                const folderData = builtInFolders.map(function(cat){ return { name: cat.name, count: memories.filter(function(item){return Number(item.category_id) === cat.id;}).length }; }).concat(customFolders);
                 const folders = document.getElementById('legacy-folders');
                 if (folders) folders.innerHTML = folderData.map(function(folder){return '<button class="legacy-folder" data-folder="' + escapeHtml(folder.name) + '" onclick="openLegacyFolder(this.dataset.folder)"><i class="fas fa-folder"></i><strong>' + escapeHtml(folder.name) + '</strong><small>' + (folder.count || 0) + '개 자료 · AI 자동 분류</small></button>';}).join('');
 
@@ -4506,6 +4510,7 @@ app.get('/', (c) => {
             showAuthContainer();
             showRegister();
         </script>
+        <script src="/static/feature-complete.js"></script>
     </body>
     </html>
   `)
