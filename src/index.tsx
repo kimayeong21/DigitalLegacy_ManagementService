@@ -1619,7 +1619,7 @@ app.get('/', (c) => {
           .auth-shell { background: var(--surface) !important; border-radius: 22px !important; overflow: hidden; }
           .auth-screen { position: relative; justify-content: flex-end !important; padding: 42px !important; background: linear-gradient(145deg, #10182b 0%, #1f2b4f 100%) !important; box-shadow: 0 24px 70px rgba(31,43,79,.2) !important; }
           .auth-screen::before { content: "당신의 기록을\\A 오래 남는 아카이브로."; white-space: pre; position: absolute; left: 7%; top: 50%; transform: translateY(-50%); width: 42%; color: white; font-size: clamp(30px, 4vw, 54px); line-height: 1.12; letter-spacing: -.06em; font-weight: 800; }
-          .auth-screen::after { content: "MEMORYLINK  /  PRIVATE ARCHIVE"; position: absolute; left: 7%; bottom: 48px; color: #91a4d0; font-size: 12px; letter-spacing: .18em; }
+          .auth-screen::after { content: "MEMORYLINK  /  AI DIGITAL LEGACY"; position: absolute; left: 7%; bottom: 48px; color: #91a4d0; font-size: 12px; letter-spacing: .18em; }
           .auth-form-panel { width: min(390px, 44%) !important; border-radius: 18px !important; box-shadow: 0 22px 60px rgba(0,0,0,.18) !important; }
           .auth-primary-button { background: var(--accent) !important; border-radius: 10px !important; }
           .auth-brand-block .fa-heart, .auth-bottom-link button { color: var(--accent) !important; }
@@ -1849,7 +1849,7 @@ app.get('/', (c) => {
                 <h2 id="auth-title" class="auth-column-title">
                     <span class="auth-story-kicker">MemoryLink · Private Archive</span>
                     <span class="auth-story-body auth-story-register">
-                        <span class="auth-story-title">당신의 기억을<br>안전하게 이어주세요.</span>
+                        <span class="auth-story-title">당신의 디지털 유산을<br>안전하게 정리하세요.</span>
                         <span class="auth-story-copy">사진과 기록에 담긴 감정까지 AI가 정리해<br>오래도록 다시 꺼내볼 수 있게 보관합니다.</span>
                     </span>
                     <span class="auth-story-body auth-story-login">
@@ -1867,7 +1867,7 @@ app.get('/', (c) => {
                         <div class="auth-brand-block">
                             <i class="fas fa-heart text-5xl text-purple-600 mb-4"></i>
                             <h1 class="text-3xl font-extrabold text-gray-900">MemoryLink</h1>
-                            <p class="text-xs text-gray-500 mt-2">새로운 개인 아카이브를 시작하세요</p>
+                            <p class="text-xs text-gray-500 mt-2">나만의 AI 디지털 유품 보관함을 시작하세요</p>
                         </div>
                         <div class="auth-form-heading">
                             <span>01</span>
@@ -1876,6 +1876,7 @@ app.get('/', (c) => {
                         <div id="register-success-message" class="hidden rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700 mb-3">
                             회원가입이 완료되었습니다. 로그인해 주세요.
                         </div>
+                        <div id="register-error-message" class="hidden auth-feedback auth-feedback-error" role="alert"></div>
                         <form id="register-submit" class="auth-form-body space-y-5">
                             <div>
                                 <label class="block text-xs font-semibold text-gray-700 mb-1.5">이름</label>
@@ -1895,7 +1896,7 @@ app.get('/', (c) => {
                                 </div>
                                 <p class="text-xs text-green-600 mt-2">비밀번호는 최소 6자 이상으로 작성합니다.</p>
                             </div>
-                            <button type="submit" class="auth-primary-button">가입하기</button>
+                            <button id="register-button" type="submit" class="auth-primary-button">가입하고 바로 시작하기</button>
                         </form>
                         <p class="auth-bottom-link text-sm text-gray-500">
                             이미 계정이 있으신가요?
@@ -1911,8 +1912,9 @@ app.get('/', (c) => {
                         </div>
                         <div class="auth-form-heading">
                             <span><i class="fas fa-key"></i></span>
-                            <div><h3 class="auth-form-title text-xl font-extrabold text-gray-900">로그인</h3><p>저장된 추억을 계속 이어가세요.</p></div>
+                            <div><h3 class="auth-form-title text-xl font-extrabold text-gray-900">로그인</h3><p>정리 중인 디지털 유품 보관함으로 돌아가세요.</p></div>
                         </div>
+                        <div id="login-error-message" class="hidden auth-feedback auth-feedback-error" role="alert"></div>
                         <form id="login-submit" class="auth-form-body space-y-5">
                             <div>
                                 <label class="block text-xs font-semibold text-gray-700 mb-1.5">이메일</label>
@@ -1927,7 +1929,7 @@ app.get('/', (c) => {
                                     </button>
                                 </div>
                             </div>
-                            <button type="submit" class="auth-primary-button">로그인</button>
+                            <button id="login-button" type="submit" class="auth-primary-button">로그인</button>
                         </form>
                         <p class="auth-bottom-link text-sm text-gray-500">
                             계정이 없으신가요?
@@ -1941,35 +1943,35 @@ app.get('/', (c) => {
         <!-- Main App Container (hidden until logged in) -->
         <div id="main-app" class="hidden">
             <!-- Header -->
-            <header class="sticky top-0 z-40" style="background:#1b1a17 !important;border-color:#1b1a17 !important">
+            <header class="sticky top-0 z-40">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div class="flex items-center justify-between">
                         <button onclick="showView('dashboard')" class="flex items-center space-x-3 text-left hover:opacity-80 transition" title="메인화면">
                             <i class="fas fa-heart text-3xl text-purple-600"></i>
                             <div>
                                 <h1 class="text-2xl font-bold text-gray-900">MemoryLink</h1>
-                                <p class="text-xs text-gray-500">Private Digital Archive</p>
+                                <p class="text-xs text-gray-500">AI Digital Legacy Manager</p>
                             </div>
                         </button>
                         <div class="flex items-center space-x-4">
                             <nav class="hidden md:flex space-x-2">
                                 <button onclick="showView('dashboard')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
-                                    <i class="fas fa-wand-magic-sparkles mr-1"></i>오늘의 기억
+                                    <i class="fas fa-chart-pie mr-1"></i>정리 현황
+                                </button>
+                                <button onclick="showView('organize')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
+                                    <i class="fas fa-wand-magic-sparkles mr-1"></i>AI 정리함
+                                </button>
+                                <button onclick="showView('vault')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
+                                    <i class="fas fa-box-archive mr-1"></i>유품 보관함
+                                </button>
+                                <button onclick="showView('transfer')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
+                                    <i class="fas fa-people-arrows mr-1"></i>전달 관리
                                 </button>
                                 <button onclick="showView('memories')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
-                                    <i class="fas fa-images mr-1"></i>추억
-                                </button>
-                                <button onclick="showView('timeline')" class="nav-btn px-3 py-2 text-sm text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition">
-                                    <i class="fas fa-stream mr-1"></i>타임라인
-                                </button>
-                                <button onclick="showRandomMemory()" class="px-3 py-2 text-sm text-gray-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">
-                                    <i class="fas fa-shuffle mr-1"></i>추억 다시보기
-                                </button>
-                                <button onclick="exportData()" class="px-3 py-2 text-sm text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-lg transition">
-                                    <i class="fas fa-download mr-1"></i>내보내기
+                                    <i class="fas fa-magnifying-glass mr-1"></i>자료 검색
                                 </button>
                                 <button onclick="showAddMemory()" class="px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-                                    <i class="fas fa-plus mr-1"></i>추억 추가
+                                    <i class="fas fa-cloud-arrow-up mr-1"></i>자료 추가
                                 </button>
                             </nav>
                             <div class="flex items-center space-x-2">
@@ -1986,81 +1988,33 @@ app.get('/', (c) => {
 
             <!-- Main Content -->
             <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <!-- Dashboard View -->
-                <div id="dashboard-view" class="view-section">
-                    <div class="flex items-center justify-between mb-6">
-                        <div>
-                            <p class="recall-page-kicker">AI MEMORY RECALL</p>
-                            <h2 class="text-3xl font-bold text-gray-900">오늘의 기억</h2>
-                            <p class="recall-page-description">기록을 쌓는 데서 끝나지 않도록, 다시 만날 순간을 골라드려요.</p>
-                        </div>
-                        <button onclick="showAddMemory()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition font-semibold shadow-lg">
-                            <i class="fas fa-plus-circle mr-2"></i>새 추억 추가
-                        </button>
-                    </div>
-
-                    <!-- AI Memory Recall -->
-                    <section id="recall-hub" class="recall-hub" aria-labelledby="recall-hub-title">
-                        <div class="recall-loading"><i class="fas fa-circle-notch fa-spin"></i> 오늘 다시 만날 기억을 고르고 있어요.</div>
+                <!-- Digital Legacy Dashboard -->
+                <div id="dashboard-view" class="view-section legacy-view">
+                    <section class="legacy-hero">
+                        <div><span class="legacy-eyebrow">AI DIGITAL LEGACY</span><h2>디지털 유품 정리 센터</h2><p>흩어진 사진·영상·문서·음성을 AI가 분석하고, 보존할 유품과 정리할 자료를 한곳에서 관리합니다.</p></div>
+                        <div class="legacy-hero-actions"><button onclick="showAddMemory()" class="legacy-primary"><i class="fas fa-cloud-arrow-up"></i> 파일 업로드</button><button onclick="connectDriveDemo()" class="legacy-secondary"><i class="fab fa-google-drive"></i> Google Drive 연결</button></div>
                     </section>
-                    
-                    <!-- Statistics -->
-                    <div id="statistics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div class="metric-card metric-primary p-6 rounded-xl">
-                            <i class="fas fa-database text-3xl mb-2"></i>
-                            <p class="text-sm opacity-90">총 추억</p>
-                            <p id="total-memories" class="text-4xl font-bold">0</p>
-                        </div>
-                        <div class="metric-card p-6 rounded-xl">
-                            <i class="fas fa-smile text-3xl mb-2"></i>
-                            <p class="text-sm opacity-90">긍정적 추억</p>
-                            <p id="positive-memories" class="text-4xl font-bold">0</p>
-                        </div>
-                        <div class="metric-card p-6 rounded-xl">
-                            <i class="fas fa-meh text-3xl mb-2"></i>
-                            <p class="text-sm opacity-90">중립적 추억</p>
-                            <p id="neutral-memories" class="text-4xl font-bold">0</p>
-                        </div>
-                        <button type="button" onclick="showImportanceChart()" class="metric-card metric-clickable p-6 rounded-xl" aria-label="평균 중요도 분포 그래프 보기">
-                            <i class="fas fa-chart-line text-3xl mb-2"></i>
-                            <p class="text-sm opacity-90">평균 중요도</p>
-                            <p id="avg-importance" class="text-4xl font-bold">0</p>
-                            <span class="metric-card-hint">분포 보기 <i class="fas fa-arrow-right"></i></span>
-                        </button>
+                    <div id="statistics" class="legacy-metrics">
+                        <button onclick="showView('memories')"><span class="legacy-metric-icon blue"><i class="fas fa-layer-group"></i></span><small>전체 자료</small><strong id="total-memories">0</strong><em>스마트 검색</em></button>
+                        <button onclick="showView('organize')"><span class="legacy-metric-icon violet"><i class="fas fa-wand-magic-sparkles"></i></span><small>AI 분류 완료</small><strong id="legacy-organized-count">0</strong><em>분석 결과 보기</em></button>
+                        <button onclick="showView('organize')"><span class="legacy-metric-icon amber"><i class="fas fa-clone"></i></span><small>중복·정리 추천</small><strong id="legacy-cleanup-count">0</strong><em>검토 필요</em></button>
+                        <button onclick="showView('vault')"><span class="legacy-metric-icon rose"><i class="fas fa-box-archive"></i></span><small>중요 유품</small><strong id="legacy-vault-count">0</strong><em>보관함 열기</em></button>
+                        <span class="hidden" id="positive-memories">0</span><span class="hidden" id="neutral-memories">0</span><span class="hidden" id="avg-importance">0</span>
                     </div>
-
-                    <!-- Collection Health -->
-                    <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
-                        <div class="flex items-center justify-between mb-5">
-                            <div>
-                                <h3 class="text-xl font-bold text-gray-900">보관함 현황</h3>
-                                <p class="text-sm text-gray-500 mt-1">많이 남긴 기록과 아직 비어있는 기록을 한눈에 확인하세요</p>
-                            </div>
-                            <button onclick="showAddMemory()" class="hidden sm:inline-flex items-center px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition font-semibold text-sm">
-                                <i class="fas fa-plus mr-2"></i>바로 추가
-                            </button>
-                        </div>
-                        <div id="categories-chart" class="space-y-4"></div>
-                    </div>
-
-                    <!-- Recent Memories -->
-                    <div class="bg-white rounded-xl shadow-sm p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-xl font-bold text-gray-900">최근 추억</h3>
-                            <button onclick="showView('memories')" class="text-sm text-purple-600 hover:text-purple-700 font-semibold">
-                                모두 보기 <i class="fas fa-arrow-right ml-1"></i>
-                            </button>
-                        </div>
-                        <div id="recent-memories" class="space-y-3"></div>
-                        
-                        <!-- Quick Add Button in Dashboard -->
-                        <div onclick="showAddMemory()" class="add-memory-card mt-4 p-6 rounded-xl text-white text-center">
-                            <i class="fas fa-plus-circle text-5xl mb-3 opacity-90"></i>
-                            <p class="text-lg font-bold mb-1">첫 번째 추억을 추가하세요</p>
-                            <p class="text-sm opacity-75">클릭하여 소중한 순간을 기록하세요</p>
-                        </div>
-                    </div>
+                    <section class="legacy-layout">
+                        <div class="legacy-panel legacy-progress-panel"><div class="legacy-section-head"><div><span>정리 진행률</span><h3>AI가 자료를 정리하고 있어요</h3></div><button onclick="runAiOrganization()">전체 분석 시작</button></div><div id="legacy-progress"></div></div>
+                        <div class="legacy-panel legacy-task-panel"><div class="legacy-section-head"><div><span>오늘의 할 일</span><h3>검토가 필요한 항목</h3></div></div><div id="legacy-tasks"></div></div>
+                    </section>
+                    <section class="legacy-panel legacy-folder-panel"><div class="legacy-section-head"><div><span>AI 자동 폴더</span><h3>자료 특성에 맞춰 만든 보관 구조</h3></div><button onclick="createSuggestedFolder()"><i class="fas fa-folder-plus"></i> 추천 폴더 생성</button></div><div id="legacy-folders" class="legacy-folder-grid"></div></section>
+                    <section class="legacy-panel legacy-status-panel"><div class="legacy-section-head"><div><span>유품 정리 상태</span><h3>보존부터 전달까지 한눈에</h3></div><button onclick="showView('trash')">휴지통 보기</button></div><div id="legacy-status-board" class="legacy-status-grid"></div></section>
+                    <section class="legacy-recall-wrap"><div class="legacy-section-head"><div><span>부가 기능 · AI 추억 회상</span><h3>오늘 다시 만날 기억</h3></div><button onclick="showView('timeline')">타임라인 보기</button></div><section id="recall-hub" class="recall-hub" aria-labelledby="recall-hub-title"><div class="recall-loading"><i class="fas fa-circle-notch fa-spin"></i> 오늘 다시 만날 기억을 고르고 있어요.</div></section></section>
+                    <div class="hidden"><div id="categories-chart"></div><div id="recent-memories"></div></div>
                 </div>
+
+                <div id="organize-view" class="view-section legacy-view hidden"><div class="legacy-page-head"><div><span>AI ORGANIZER</span><h2>AI 정리함</h2><p>내용·날짜·유형·키워드를 분석해 자동 분류하고 정리 대상을 추천합니다.</p></div><button onclick="showAddMemory()" class="legacy-primary"><i class="fas fa-plus"></i> 자료 가져오기</button></div><div id="legacy-organize-content"></div></div>
+                <div id="vault-view" class="view-section legacy-view hidden"><div class="legacy-page-head"><div><span>DIGITAL HEIRLOOM VAULT</span><h2>디지털 유품 보관함</h2><p>AI가 선별했거나 직접 보존한 중요한 자료만 안전하게 모아봅니다.</p></div><button onclick="showView('transfer')" class="legacy-primary"><i class="fas fa-user-shield"></i> 전달 계획 설정</button></div><div id="legacy-vault-content"></div></div>
+                <div id="transfer-view" class="view-section legacy-view hidden"><div class="legacy-page-head"><div><span>LEGACY TRANSFER</span><h2>디지털 유산 전달 관리</h2><p>보관한 유품을 누구에게, 어떤 조건으로 전달할지 계획합니다.</p></div></div><div id="legacy-transfer-content"></div></div>
+                <div id="trash-view" class="view-section legacy-view hidden"><div class="legacy-page-head"><div><span>RECYCLE BIN</span><h2>휴지통</h2><p>삭제한 자료는 즉시 사라지지 않으며 다시 복원할 수 있습니다.</p></div><button onclick="emptyLegacyTrash()" class="legacy-danger"><i class="fas fa-trash"></i> 휴지통 비우기</button></div><div id="legacy-trash-content"></div></div>
 
                 <!-- Memories View -->
                 <div id="memories-view" class="view-section hidden">
@@ -2175,14 +2129,15 @@ app.get('/', (c) => {
                                 <!-- File Upload Area -->
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                                        파일 업로드 (이미지/동영상)
+                                        내 기기에서 파일 업로드
                                     </label>
                                     <div id="upload-area" class="upload-area p-8 rounded-lg text-center cursor-pointer">
                                         <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
-                                        <p class="text-sm text-gray-600">클릭하거나 파일을 드래그하세요</p>
-                                        <p class="text-xs text-gray-400 mt-1">스크린샷을 복사 후 Ctrl+V로 붙여넣기 가능</p>
-                                        <p class="text-xs text-gray-400 mt-1">또는 아래에 URL을 직접 입력하세요</p>
-                                        <input type="file" id="file-input" class="hidden" accept="image/*,video/*">
+                                        <p class="text-sm text-gray-700 font-semibold">사진·영상·문서·음성 등 파일을 선택하세요</p>
+                                        <p class="text-xs text-gray-400 mt-1">파일을 끌어놓거나 스크린샷을 Ctrl+V로 붙여넣을 수도 있습니다</p>
+                                        <button type="button" onclick="event.stopPropagation(); document.getElementById('file-input').click()" class="file-picker-button"><i class="fas fa-folder-open"></i> 내 파일에서 선택</button>
+                                        <p class="text-xs text-gray-400 mt-2">지원: 이미지, 동영상, PDF, 문서, 음성, 압축 파일 · 최대 25MB</p>
+                                        <input type="file" id="file-input" class="hidden" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.rtf,.hwp,.hwpx,.zip,.rar,.7z,.csv,.json">
                                     </div>
                                     <input type="text" id="file-url" placeholder="또는 파일 URL 입력" class="mt-2 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm">
                                     <div id="file-preview" class="mt-2"></div>
@@ -2305,17 +2260,22 @@ app.get('/', (c) => {
             let currentView = 'dashboard';
             let categories = [];
             let uploadedFileUrl = null;
+            let uploadedFileType = null;
+            let uploadedFileName = null;
             let localMode = false;
             let appListenersReady = false;
             let favoritesOnly = false;
             const selectedMemoryIds = new Set();
 
             const LOCAL_USER_KEY = 'memorylink_local_user';
+            const LOCAL_ACCOUNTS_KEY = 'memorylink_local_accounts';
             const LOCAL_MEMORIES_KEY = 'memorylink_local_memories';
             const LOCAL_DEMO_SEEDED_KEY = 'memorylink_demo_seeded';
             const LOCAL_FAVORITES_KEY = 'memorylink_favorites';
             const LOCAL_RECALL_SETTINGS_KEY = 'memorylink_recall_settings';
             const LOCAL_RECALL_NOTICE_KEY = 'memorylink_recall_notice_date';
+            const LOCAL_TRANSFER_PLANS_KEY = 'memorylink_transfer_plans';
+            const LOCAL_CUSTOM_FOLDERS_KEY = 'memorylink_custom_folders';
             const LOCAL_CATEGORIES = [
                 { id: 1, name: '사진', icon: '📷', color: '#3B82F6' },
                 { id: 2, name: '동영상', icon: '🎥', color: '#8B5CF6' },
@@ -2932,7 +2892,7 @@ app.get('/', (c) => {
                 const emotion = document.getElementById('emotion-filter').value;
                 const favoriteIds = getFavoriteIds();
                 const limit = 12;
-                let data = getLocalMemories().map(enrichMemory);
+                let data = getLocalMemories().filter(memory => memory.legacy_status !== 'trash').map(enrichMemory);
 
                 if (category) {
                     data = data.filter(memory => Number(memory.category_id) === Number(category));
@@ -3040,7 +3000,7 @@ app.get('/', (c) => {
             }
 
             function deleteLocalMemory(id) {
-                saveLocalMemories(getLocalMemories().filter(memory => String(memory.id) !== String(id)));
+                saveLocalMemories(getLocalMemories().map(memory => String(memory.id) === String(id) ? { ...memory, legacy_status: 'trash', deleted_at: new Date().toISOString() } : memory));
             }
 
             // ==================== Auth Functions ====================
@@ -3122,13 +3082,49 @@ app.get('/', (c) => {
                 document.getElementById('register-success-message').classList.remove('hidden');
             }
 
+            function setAuthFeedback(type, message) {
+                const node = document.getElementById(type + '-error-message');
+                if (!node) return;
+                node.textContent = message || '';
+                node.classList.toggle('hidden', !message);
+            }
+
+            function setAuthBusy(type, busy) {
+                const button = document.getElementById(type + '-button');
+                if (!button) return;
+                button.disabled = busy;
+                button.innerHTML = busy ? '<i class="fas fa-circle-notch fa-spin"></i> 처리 중...' : (type === 'register' ? '가입하고 바로 시작하기' : '로그인');
+            }
+
+            async function hashLocalPassword(password) {
+                const bytes = new TextEncoder().encode(password);
+                const digest = await crypto.subtle.digest('SHA-256', bytes);
+                return Array.from(new Uint8Array(digest)).map(function(value){ return value.toString(16).padStart(2, '0'); }).join('');
+            }
+
+            function getLocalAccounts() {
+                try { return JSON.parse(localStorage.getItem(LOCAL_ACCOUNTS_KEY) || '[]'); } catch { return []; }
+            }
+
+            async function saveLocalAccount(user, password) {
+                const accounts = getLocalAccounts();
+                const normalizedEmail = String(user.email || '').trim().toLowerCase();
+                const account = { ...user, email: normalizedEmail, password_hash: await hashLocalPassword(password) };
+                const index = accounts.findIndex(function(item){ return String(item.email || '').toLowerCase() === normalizedEmail; });
+                if (index >= 0) accounts[index] = account; else accounts.push(account);
+                localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(accounts));
+                return account;
+            }
+
             if (new URLSearchParams(window.location.search).get('auth') === 'register') {
                 showRegister();
             }
 
             document.getElementById('login-submit').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const email = document.getElementById('login-email').value;
+                setAuthFeedback('login', '');
+                setAuthBusy('login', true);
+                const email = document.getElementById('login-email').value.trim().toLowerCase();
                 const password = document.getElementById('login-password').value;
 
                 try {
@@ -3138,36 +3134,55 @@ app.get('/', (c) => {
                     localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
                     showMainApp();
                 } catch (error) {
+                    const passwordHash = await hashLocalPassword(password);
+                    const account = getLocalAccounts().find(function(item){ return String(item.email || '').toLowerCase() === email && item.password_hash === passwordHash; });
+                    if (!account) {
+                        setAuthFeedback('login', error.response?.data?.error || '이메일 또는 비밀번호를 확인해 주세요.');
+                        return;
+                    }
                     localMode = true;
-                    currentUser = {
-                        id: 'local-user',
-                        email,
-                        name: email.split('@')[0] || '사용자',
-                        avatar_url: \`https://ui-avatars.com/api/?name=\${encodeURIComponent(email.split('@')[0] || 'User')}&background=667eea&color=fff\`
-                    };
+                    currentUser = { id: account.id, email: account.email, name: account.name, avatar_url: account.avatar_url };
                     localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
                     showMainApp();
+                } finally {
+                    setAuthBusy('login', false);
                 }
             });
 
             document.getElementById('register-submit').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const name = document.getElementById('register-name').value;
-                const email = document.getElementById('register-email').value;
+                setAuthFeedback('register', '');
+                setAuthBusy('register', true);
+                const name = document.getElementById('register-name').value.trim();
+                const email = document.getElementById('register-email').value.trim().toLowerCase();
                 const password = document.getElementById('register-password').value;
 
+                if (name.length < 2) { setAuthFeedback('register', '이름을 2자 이상 입력해 주세요.'); setAuthBusy('register', false); return; }
+                if (password.length < 6) { setAuthFeedback('register', '비밀번호를 6자 이상 입력해 주세요.'); setAuthBusy('register', false); return; }
+
                 try {
-                    await axios.post(\`\${API_BASE}/auth/register\`, { name, email, password });
-                    await axios.post(\`\${API_BASE}/auth/logout\`).catch(() => {});
-                    currentUser = null;
-                    localMode = false;
-                    localStorage.removeItem(LOCAL_USER_KEY);
-                    showLoginAfterRegister(email);
-                } catch (error) {
-                    currentUser = null;
+                    const response = await axios.post(\`\${API_BASE}/auth/register\`, { name, email, password });
+                    currentUser = response.data.user;
+                    await saveLocalAccount(currentUser, password);
                     localMode = true;
-                    localStorage.removeItem(LOCAL_USER_KEY);
-                    showLoginAfterRegister(email);
+                    localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
+                    showMainApp();
+                } catch (error) {
+                    const serverMessage = error.response?.data?.error || '';
+                    if (error.response && (error.response.status === 409 || /이미 존재|이미 가입/.test(serverMessage))) {
+                        setAuthFeedback('register', serverMessage || '이미 가입된 이메일입니다. 로그인해 주세요.');
+                        return;
+                    }
+                    localMode = true;
+                    currentUser = {
+                        id: 'local-' + Date.now(), email, name,
+                        avatar_url: \`https://ui-avatars.com/api/?name=\${encodeURIComponent(name)}&background=315efb&color=fff\`
+                    };
+                    await saveLocalAccount(currentUser, password);
+                    localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
+                    showMainApp();
+                } finally {
+                    setAuthBusy('register', false);
                 }
             });
 
@@ -3292,97 +3307,66 @@ app.get('/', (c) => {
             async function handleFileSelect(e) {
                 const file = e.target.files[0];
                 if (!file) return;
-                
+                uploadedFileType = file.type || 'application/octet-stream';
+                uploadedFileName = file.name;
+
                 const preview = document.getElementById('file-preview');
-                const maxSize = 10 * 1024 * 1024; // 10MB
-                
+                const maxSize = 25 * 1024 * 1024;
                 if (file.size > maxSize) {
-                    preview.innerHTML = \`
-                        <div class="p-3 bg-red-50 rounded-lg border border-red-200">
-                            <p class="text-sm text-red-800">
-                                <i class="fas fa-exclamation-circle"></i>
-                                파일 크기가 너무 큽니다 (최대 10MB)
-                            </p>
-                        </div>
-                    \`;
+                    preview.innerHTML = '<div class="p-3 bg-red-50 rounded-lg border border-red-200 text-sm text-red-800"><i class="fas fa-exclamation-circle"></i> 파일 크기가 너무 큽니다 (최대 25MB)</div>';
                     return;
                 }
-                
-                preview.innerHTML = \`
-                    <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                        <div class="flex items-center space-x-2">
-                            <i class="fas fa-spinner fa-spin text-blue-600"></i>
-                            <span class="text-sm text-blue-700">\${file.name} 처리 중...</span>
-                        </div>
-                        <span class="text-xs text-blue-500">\${(file.size / 1024 / 1024).toFixed(2)} MB</span>
-                    </div>
-                \`;
-                
-                // 이미지를 Base64로 변환하여 직접 저장
+
+                const titleInput = document.getElementById('title');
+                if (!titleInput.value.trim()) titleInput.value = file.name.replace(/\.[^.]+$/, '');
+                const categorySelect = document.getElementById('category');
+                if (!categorySelect.value) categorySelect.value = file.type.startsWith('image/') ? '1' : file.type.startsWith('video/') ? '2' : file.type.startsWith('audio/') ? '6' : '3';
+
+                preview.innerHTML = '<div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg"><span class="text-sm text-blue-700"><i class="fas fa-spinner fa-spin"></i> ' + escapeHtml(file.name) + ' 처리 중...</span><span class="text-xs text-blue-500">' + (file.size / 1024 / 1024).toFixed(2) + ' MB</span></div>';
+
                 if (file.type.startsWith('image/')) {
                     const reader = new FileReader();
-                    reader.onload = (e) => {
-                        uploadedFileUrl = e.target.result; // Base64 data URL
+                    reader.onload = function(event) {
+                        uploadedFileUrl = event.target.result;
                         document.getElementById('file-url').value = uploadedFileUrl;
-                        
-                        preview.innerHTML = \`
-                            <div class="p-3 bg-green-50 rounded-lg border border-green-200">
-                                <div class="flex items-center space-x-2 mb-2">
-                                    <i class="fas fa-check-circle text-green-600"></i>
-                                    <span class="text-sm text-green-700">이미지 준비 완료!</span>
-                                </div>
-                                <img src="\${e.target.result}" class="rounded-lg max-h-48 object-cover w-full">
-                            </div>
-                        \`;
+                        preview.innerHTML = '<div class="p-3 bg-green-50 rounded-lg border border-green-200"><div class="flex items-center justify-between mb-2"><span class="text-sm text-green-800"><i class="fas fa-check-circle"></i> ' + escapeHtml(file.name) + '</span><button type="button" onclick="clearSelectedFile()" class="text-xs font-bold text-green-800">변경</button></div><img src="' + event.target.result + '" class="rounded-lg max-h-48 object-cover w-full"></div>';
                     };
-                    reader.onerror = () => {
-                        preview.innerHTML = \`
-                            <div class="p-3 bg-red-50 rounded-lg border border-red-200">
-                                <p class="text-sm text-red-800">
-                                    <i class="fas fa-exclamation-circle"></i>
-                                    파일 읽기 실패
-                                </p>
-                            </div>
-                        \`;
-                    };
+                    reader.onerror = function(){ preview.innerHTML = '<div class="p-3 bg-red-50 rounded-lg border border-red-200 text-sm text-red-700">파일을 읽지 못했습니다. 다시 선택해 주세요.</div>'; };
                     reader.readAsDataURL(file);
                     return;
                 }
-                
-                // R2 업로드 시도 (동영상 등)
+
                 try {
                     const formData = new FormData();
                     formData.append('file', file);
-                    
-                    const response = await axios.post(\`\${API_BASE}/upload\`, formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                    });
-                    
+                    const response = await axios.post(\`\${API_BASE}/upload\`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
                     uploadedFileUrl = response.data.url;
                     document.getElementById('file-url').value = uploadedFileUrl;
-                    
-                    preview.innerHTML = \`
-                        <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                            <div class="flex items-center space-x-2">
-                                <i class="fas fa-check-circle text-green-600"></i>
-                                <span class="text-sm text-green-700">업로드 완료!</span>
-                            </div>
-                        </div>
-                    \`;
+                    preview.innerHTML = '<div class="flex items-center justify-between gap-3 p-3 bg-green-50 rounded-lg border border-green-200"><span class="min-w-0 text-sm text-green-800"><i class="fas fa-check-circle"></i> <b>' + escapeHtml(file.name) + '</b><small class="block mt-1">업로드 완료 · ' + (file.size / 1024 / 1024).toFixed(2) + ' MB</small></span><button type="button" onclick="clearSelectedFile()" class="text-xs font-bold text-green-800">변경</button></div>';
                 } catch (error) {
-                    console.log('R2 업로드 실패:', error.response?.data?.error);
-                    preview.innerHTML = \`
-                        <div class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                            <p class="text-sm text-yellow-800">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                R2 업로드 불가 (버킷 미설정)
-                            </p>
-                            <p class="text-xs text-yellow-700 mt-1">
-                                아래 URL 입력란에 외부 URL을 입력하세요
-                            </p>
-                        </div>
-                    \`;
+                    if (file.size <= 4 * 1024 * 1024) {
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            uploadedFileUrl = event.target.result;
+                            document.getElementById('file-url').value = uploadedFileUrl;
+                            preview.innerHTML = '<div class="p-3 bg-green-50 rounded-lg border border-green-200"><p class="text-sm text-green-800"><i class="fas fa-check-circle"></i> <b>' + escapeHtml(file.name) + '</b></p><p class="text-xs text-green-700 mt-1">기기에 저장할 준비가 완료되었습니다.</p></div>';
+                        };
+                        reader.onerror = function(){ preview.innerHTML = '<div class="p-3 bg-red-50 rounded-lg border border-red-200 text-sm text-red-700">파일을 읽지 못했습니다. 다시 선택해 주세요.</div>'; };
+                        reader.readAsDataURL(file);
+                    } else {
+                        preview.innerHTML = '<div class="p-3 bg-yellow-50 rounded-lg border border-yellow-200"><p class="text-sm text-yellow-800"><i class="fas fa-exclamation-triangle"></i> 현재 저장소에 연결할 수 없습니다.</p><p class="text-xs text-yellow-700 mt-1">4MB가 넘는 파일은 서버 저장소 연결 후 업로드할 수 있습니다.</p></div>';
+                    }
                 }
+            }
+
+            function clearSelectedFile() {
+                document.getElementById('file-input').value = '';
+                document.getElementById('file-url').value = '';
+                document.getElementById('file-preview').innerHTML = '';
+                uploadedFileUrl = null;
+                uploadedFileType = null;
+                uploadedFileName = null;
+                document.getElementById('file-input').click();
             }
 
             async function loadCategories() {
@@ -4094,6 +4078,8 @@ app.get('/', (c) => {
                 document.getElementById('memory-id').value = '';
                 document.getElementById('file-preview').innerHTML = '';
                 uploadedFileUrl = null;
+                uploadedFileType = null;
+                uploadedFileName = null;
                 
                 // Pre-select category based on type
                 const categorySelect = document.getElementById('category');
@@ -4191,7 +4177,8 @@ app.get('/', (c) => {
                     content: document.getElementById('content').value,
                     tags: [...new Set(document.getElementById('tags').value.split(',').map(tag => tag.trim()).filter(Boolean))].slice(0, 10),
                     file_url: fileUrl || null,
-                    file_type: fileUrl ? ((fileUrl.match(/\\.(jpg|jpeg|png|gif|webp)(\\?|$)/i) || fileUrl.includes('images.unsplash.com') || document.getElementById('category').value === '1') ? 'image' : 'video') : null,
+                    file_type: fileUrl ? (uploadedFileType || ((fileUrl.match(/\\.(jpg|jpeg|png|gif|webp)(\\?|$)/i) || fileUrl.includes('images.unsplash.com') || document.getElementById('category').value === '1') ? 'image' : 'application/octet-stream')) : null,
+                    file_name: uploadedFileName || null,
                     importance_score: parseInt(document.getElementById('importance-score').value),
                     original_date: document.getElementById('original-date').value || null,
                     auto_analyze: document.getElementById('auto-analyze').checked
@@ -4271,14 +4258,14 @@ app.get('/', (c) => {
                 if (!confirm(\`선택한 \${selectedMemoryIds.size}개의 추억을 삭제하시겠습니까?\`)) return;
 
                 const selected = new Set(selectedMemoryIds);
-                saveLocalMemories(getLocalMemories().filter(memory => !selected.has(String(memory.id))));
+                saveLocalMemories(getLocalMemories().map(memory => selected.has(String(memory.id)) ? { ...memory, legacy_status: 'trash', deleted_at: new Date().toISOString() } : memory));
                 localStorage.setItem(LOCAL_FAVORITES_KEY, JSON.stringify([...getFavoriteIds()].filter(id => !selected.has(String(id)))));
                 selectedMemoryIds.clear();
                 currentPage = 1;
                 updateBulkSelection();
                 await loadMemories();
                 await loadStatistics();
-                alert('선택한 추억을 삭제했습니다.');
+                alert('선택한 자료를 휴지통으로 이동했습니다.');
             }
 
             async function importData(event) {
@@ -4349,11 +4336,129 @@ app.get('/', (c) => {
                 document.getElementById('memory-modal').classList.remove('flex');
             }
 
+            function getLegacyData() {
+                return getLocalMemories().map(enrichMemory);
+            }
+
+            function legacyStatusOf(memory) {
+                if (memory.legacy_status) return memory.legacy_status;
+                return Number(memory.importance_score || 0) >= 8 ? 'preserve' : 'review';
+            }
+
+            function updateLegacyMemory(id, patch) {
+                saveLocalMemories(getLocalMemories().map(function(memory) {
+                    return String(memory.id) === String(id) ? { ...memory, ...patch, updated_at: new Date().toISOString() } : memory;
+                }));
+                renderLegacyWorkspace();
+                if (currentView !== 'dashboard') showView(currentView);
+            }
+
+            function setLegacyStatus(id, status) {
+                const labels = { preserve: '유품 보관함', pending_delete: '삭제 예정', hold: '보류', transfer: '전달 예정', review: '검토 대기' };
+                updateLegacyMemory(id, { legacy_status: status });
+                alert((labels[status] || status) + ' 상태로 변경했습니다.');
+            }
+
+            function renderLegacyWorkspace() {
+                const memories = getLegacyData().filter(function(item) { return legacyStatusOf(item) !== 'trash'; });
+                const organized = memories.filter(function(item) { return item.ai_summary || item.ai_keywords; }).length;
+                const cleanup = memories.filter(function(item, index) {
+                    return legacyStatusOf(item) === 'pending_delete' || memories.findIndex(function(other) { return other.title === item.title; }) !== index;
+                }).length;
+                const vault = memories.filter(function(item) { return legacyStatusOf(item) === 'preserve' || legacyStatusOf(item) === 'transfer'; }).length;
+                const setText = function(id, value) { const node = document.getElementById(id); if (node) node.textContent = String(value); };
+                setText('legacy-organized-count', organized);
+                setText('legacy-cleanup-count', cleanup);
+                setText('legacy-vault-count', vault);
+
+                const progress = document.getElementById('legacy-progress');
+                if (progress) {
+                    const total = Math.max(memories.length, 1);
+                    const classified = Math.round(organized / total * 100);
+                    const reviewed = Math.round(memories.filter(function(item) { return legacyStatusOf(item) !== 'review'; }).length / total * 100);
+                    const preserved = Math.round(vault / total * 100);
+                    progress.innerHTML = [
+                        ['AI 내용 분석', classified], ['자동 폴더 분류', Math.max(classified - 8, 0)], ['사용자 검토', reviewed], ['유품 보관 완료', preserved]
+                    ].map(function(row) { return '<div class="legacy-progress-row"><span>' + row[0] + '</span><div class="legacy-progress-track"><i style="width:' + row[1] + '%"></i></div><b>' + row[1] + '%</b></div>'; }).join('');
+                }
+
+                const tasks = document.getElementById('legacy-tasks');
+                if (tasks) tasks.innerHTML = [
+                    ['fa-clone', cleanup + '개의 중복·유사 자료', '같은 제목과 유사한 파일을 확인하세요', "showView('organize')"],
+                    ['fa-star', memories.filter(function(item){return Number(item.importance_score || 0) >= 8 && legacyStatusOf(item) === 'review';}).length + '개의 중요 유품 후보', 'AI 중요도 기반 자동 선별 결과', "showView('vault')"],
+                    ['fa-paper-plane', memories.filter(function(item){return legacyStatusOf(item) === 'transfer';}).length + '개의 전달 예정 유품', '수신인과 전달 조건을 확인하세요', "showView('transfer')"]
+                ].map(function(item){return '<div class="legacy-task"><i class="fas ' + item[0] + '"></i><div><strong>' + item[1] + '</strong><small>' + item[2] + '</small></div><button onclick="' + item[3] + '">열기</button></div>';}).join('');
+
+                const customFolders = JSON.parse(localStorage.getItem(LOCAL_CUSTOM_FOLDERS_KEY) || '[]');
+                const folderData = LOCAL_CATEGORIES.slice(0, 5).map(function(cat){ return { name: cat.name, count: memories.filter(function(item){return Number(item.category_id) === cat.id;}).length }; }).concat(customFolders);
+                const folders = document.getElementById('legacy-folders');
+                if (folders) folders.innerHTML = folderData.map(function(folder){return '<button class="legacy-folder" data-folder="' + escapeHtml(folder.name) + '" onclick="openLegacyFolder(this.dataset.folder)"><i class="fas fa-folder"></i><strong>' + escapeHtml(folder.name) + '</strong><small>' + (folder.count || 0) + '개 자료 · AI 자동 분류</small></button>';}).join('');
+
+                const statuses = [
+                    ['preserve','#315efb','보존',memories.filter(function(item){return legacyStatusOf(item)==='preserve';}).length,'중요 유품으로 안전하게 보관'],
+                    ['pending_delete','#ef6b6b','삭제 예정',memories.filter(function(item){return legacyStatusOf(item)==='pending_delete';}).length,'삭제 전 최종 검토가 필요'],
+                    ['hold','#f2ad3d','보류',memories.filter(function(item){return legacyStatusOf(item)==='hold';}).length,'결정을 나중으로 미룬 자료'],
+                    ['transfer','#7c3aed','전달 예정',memories.filter(function(item){return legacyStatusOf(item)==='transfer';}).length,'지정된 가족·지인에게 전달']
+                ];
+                const board = document.getElementById('legacy-status-board');
+                if (board) board.innerHTML = statuses.map(function(item){return '<button class="legacy-status-card" data-view="' + (item[0] === 'preserve' ? 'vault' : item[0] === 'transfer' ? 'transfer' : 'organize') + '" onclick="showView(this.dataset.view)"><span><i class="fas fa-circle" style="color:' + item[1] + '"></i>' + item[2] + '</span><strong>' + item[3] + '</strong><small>' + item[4] + '</small></button>';}).join('');
+            }
+
+            function openLegacyFolder(name) {
+                const category = LOCAL_CATEGORIES.find(function(item){ return item.name === name; });
+                if (category) document.getElementById('category-filter').value = String(category.id);
+                showView('memories');
+            }
+
+            function createSuggestedFolder() {
+                const folders = JSON.parse(localStorage.getItem(LOCAL_CUSTOM_FOLDERS_KEY) || '[]');
+                const suggestions = ['가족에게 전할 기록','계약·증명 문서','오래된 여행 아카이브','목소리 기록'];
+                const name = suggestions[folders.length % suggestions.length];
+                if (!folders.some(function(item){return item.name === name;})) folders.push({ name: name, count: 0 });
+                localStorage.setItem(LOCAL_CUSTOM_FOLDERS_KEY, JSON.stringify(folders));
+                renderLegacyWorkspace();
+            }
+
+            function runAiOrganization() {
+                const memories = getLocalMemories().map(function(memory){
+                    if (memory.ai_summary) return memory;
+                    const insight = createLocalAIInsights(memory);
+                    return { ...memory, ...insight, legacy_status: Number(memory.importance_score || insight.importance_score || 5) >= 8 ? 'preserve' : 'review' };
+                });
+                saveLocalMemories(memories);
+                renderLegacyWorkspace();
+                renderOrganizeView();
+                alert('AI 분석과 자동 분류가 완료되었습니다.');
+            }
+
+            function connectDriveDemo() {
+                localStorage.setItem('memorylink_drive_connected', 'true');
+                alert('Google Drive 연결 준비가 완료되었습니다. 실제 배포에서는 Google OAuth 승인 후 파일을 가져옵니다.');
+            }
+
+            function renderOrganizeView() {
+                const root = document.getElementById('legacy-organize-content'); if (!root) return;
+                const items = getLegacyData().filter(function(item){return !['trash','preserve','transfer'].includes(legacyStatusOf(item));});
+                root.innerHTML = '<div class="legacy-organize-grid"><section class="legacy-panel"><div class="legacy-section-head"><div><span>AI ANALYSIS QUEUE</span><h3>분류·정리 검토</h3></div><button onclick="runAiOrganization()"><i class="fas fa-rotate"></i> 다시 분석</button></div><div class="legacy-review-list">' + (items.length ? items.map(function(item){return '<article class="legacy-review-item"><i class="fas ' + (item.file_type && item.file_type.indexOf('image') === 0 ? 'fa-image' : 'fa-file-lines') + '"></i><div><strong>' + escapeHtml(item.title) + '</strong><small>' + escapeHtml(item.ai_summary || 'AI가 내용을 분석하고 자동 폴더를 추천합니다.') + ' · ' + escapeHtml(item.category_name || '미분류') + '</small></div><div class="legacy-review-actions"><button class="primary" data-status="preserve" onclick="setLegacyStatus(' + item.id + ',this.dataset.status)">보존</button><button data-status="hold" onclick="setLegacyStatus(' + item.id + ',this.dataset.status)">보류</button><button data-status="pending_delete" onclick="setLegacyStatus(' + item.id + ',this.dataset.status)">삭제 예정</button></div></article>';}).join('') : '<div class="legacy-empty"><i class="fas fa-check-circle"></i><h3>검토할 자료가 없습니다</h3><p>새 자료를 가져오면 AI 분석 결과가 여기에 표시됩니다.</p><button class="legacy-primary" onclick="showAddMemory()">자료 추가</button></div>') + '</div></section><aside class="legacy-panel"><div class="legacy-summary-card"><p>AI 정리 요약</p><strong>' + items.length + '개</strong><small>분류 결과를 검토한 뒤 보존, 삭제 예정, 보류 또는 전달 예정 상태로 지정하세요.</small></div><div class="legacy-task" style="margin-top:14px"><i class="fas fa-clone"></i><div><strong>중복·유사 자료</strong><small>제목과 파일 특징을 비교해 그룹화</small></div></div><div class="legacy-task"><i class="fas fa-broom"></i><div><strong>불필요 자료 추천</strong><small>낮은 중요도 자료를 정리 후보로 제안</small></div></div><div class="legacy-task"><i class="fas fa-folder-tree"></i><div><strong>자동 폴더 생성</strong><small>자료 특성에 맞는 폴더 구조 추천</small></div></div></aside></div>';
+            }
+
+            function renderVaultView() {
+                const root = document.getElementById('legacy-vault-content'); if (!root) return;
+                const items = getLegacyData().filter(function(item){return ['preserve','transfer'].includes(legacyStatusOf(item));});
+                root.innerHTML = items.length ? '<div class="legacy-vault-grid">' + items.map(function(item){return '<article class="legacy-vault-item"><span>' + (item.category_icon || '📦') + '</span><strong>' + escapeHtml(item.title) + '</strong><p>' + escapeHtml(item.ai_summary || item.description || '소중한 디지털 유품') + '</p><footer><span>중요도 ' + (item.importance_score || 5) + '</span><button data-status="transfer" onclick="setLegacyStatus(' + item.id + ',this.dataset.status)">전달 지정 →</button></footer></article>';}).join('') + '</div>' : '<div class="legacy-empty"><i class="fas fa-box-open"></i><h3>보관된 디지털 유품이 없습니다</h3><p>AI 정리함에서 중요 자료를 보존하면 이곳에 안전하게 모입니다.</p><button class="legacy-primary" data-view="organize" onclick="showView(this.dataset.view)">AI 정리함 열기</button></div>';
+            }
+
+            function getTransferPlans(){try{return JSON.parse(localStorage.getItem(LOCAL_TRANSFER_PLANS_KEY)||'[]')}catch{return[]}}
+            function saveTransferPlan(event){event.preventDefault();const form=event.target;const plans=getTransferPlans();plans.unshift({id:Date.now(),recipient:form.recipient.value,contact:form.contact.value,condition:form.condition.value,message:form.message.value});localStorage.setItem(LOCAL_TRANSFER_PLANS_KEY,JSON.stringify(plans));form.reset();renderTransferView();alert('전달 계획을 저장했습니다.');}
+            function renderTransferView(){const root=document.getElementById('legacy-transfer-content');if(!root)return;const plans=getTransferPlans();const count=getLegacyData().filter(function(item){return legacyStatusOf(item)==='transfer';}).length;root.innerHTML='<div class="legacy-transfer-grid"><section class="legacy-panel"><div class="legacy-section-head"><div><span>NEW TRANSFER PLAN</span><h3>수신인과 전달 조건 설정</h3></div></div><form class="legacy-form" onsubmit="saveTransferPlan(event)"><label>받는 사람<input name="recipient" required placeholder="예: 김가족"></label><label>연락처 또는 이메일<input name="contact" required placeholder="family@example.com"></label><label>전달 조건<select name="condition"><option>사용자 승인 후 즉시</option><option>지정일에 전달</option><option>장기 미접속 확인 후</option></select></label><label>남길 메시지<textarea name="message" placeholder="유품과 함께 전달할 설명을 남겨주세요."></textarea></label><button class="legacy-primary" type="submit">전달 계획 저장</button></form></section><aside class="legacy-panel"><div class="legacy-summary-card"><p>전달 예정 유품</p><strong>'+count+'개</strong><small>보관함에서 전달 대상으로 지정한 자료입니다. 실제 전달 전에는 본인 확인과 최종 승인이 필요합니다.</small></div><div class="legacy-plan-list" style="margin-top:14px">'+(plans.length?plans.map(function(plan){return '<div class="legacy-plan"><strong>'+escapeHtml(plan.recipient)+'</strong><small>'+escapeHtml(plan.contact)+'<br>'+escapeHtml(plan.condition)+'</small></div>';}).join(''):'<div class="legacy-empty" style="padding:30px 15px"><p>저장된 전달 계획이 없습니다.</p></div>')+'</div></aside></div>';}
+
+            function restoreLegacyItem(id){updateLegacyMemory(id,{legacy_status:'review',deleted_at:null});renderTrashView();}
+            function emptyLegacyTrash(){if(!confirm('휴지통의 자료를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.'))return;saveLocalMemories(getLocalMemories().filter(function(item){return legacyStatusOf(item)!=='trash';}));renderTrashView();renderLegacyWorkspace();}
+            function renderTrashView(){const root=document.getElementById('legacy-trash-content');if(!root)return;const items=getLegacyData().filter(function(item){return legacyStatusOf(item)==='trash';});root.innerHTML=items.length?'<div class="legacy-panel"><div class="legacy-review-list">'+items.map(function(item){return '<article class="legacy-review-item"><i class="fas fa-trash-can"></i><div><strong>'+escapeHtml(item.title)+'</strong><small>'+(item.deleted_at?new Date(item.deleted_at).toLocaleDateString('ko-KR'):'최근')+' 휴지통으로 이동</small></div><div class="legacy-review-actions"><button class="primary" onclick="restoreLegacyItem('+item.id+')">복원</button></div></article>';}).join('')+'</div></div>':'<div class="legacy-empty"><i class="fas fa-trash-can"></i><h3>휴지통이 비어 있습니다</h3><p>삭제한 자료는 이곳에서 복원할 수 있습니다.</p></div>';}
+
             function showView(view) {
                 currentView = view;
-                document.getElementById('dashboard-view').classList.toggle('hidden', view !== 'dashboard');
-                document.getElementById('memories-view').classList.toggle('hidden', view !== 'memories');
-                document.getElementById('timeline-view').classList.toggle('hidden', view !== 'timeline');
+                document.querySelectorAll('.view-section').forEach(function(section){ section.classList.toggle('hidden', section.id !== view + '-view'); });
                 document.querySelectorAll('[data-mobile-view]').forEach(function(button) {
                     const selected = button.dataset.mobileView === view;
                     button.classList.toggle('active', selected);
@@ -4366,7 +4471,16 @@ app.get('/', (c) => {
                     loadStatistics();
                 } else if (view === 'timeline') {
                     loadTimeline();
+                } else if (view === 'organize') {
+                    renderOrganizeView();
+                } else if (view === 'vault') {
+                    renderVaultView();
+                } else if (view === 'transfer') {
+                    renderTransferView();
+                } else if (view === 'trash') {
+                    renderTrashView();
                 }
+                renderLegacyWorkspace();
             }
 
             function debounce(func, wait) {
