@@ -1,170 +1,190 @@
-# MemoryLink: AI 기반 디지털 유품 정리 서비스
+# MemoryLink
 
-## 1. 프로젝트 개요
+AI 기반 디지털 유품 정리 및 추억 회상 서비스
 
-MemoryLink는 사진, 영상, 문서, SNS 기록 등 흩어진 디지털 자료를 한곳에서 관리하고 다시 돌아볼 수 있도록 만든 졸업작품입니다. 기록의 내용과 감정, 날짜, 중요도를 활용해 개인의 추억을 정리하고, 타임라인과 추억 다시보기로 과거의 순간을 탐색할 수 있습니다.
+MemoryLink는 사진, 영상, 문서, 음성, SNS 기록처럼 여러 위치에 흩어진 개인 자료를 분석하고 정리하는 서비스입니다. 단순한 디지털 일기장이 아니라 중요한 기록을 디지털 유품으로 선별하고, 보존 상태와 전달 계획까지 관리하는 것을 목표로 합니다.
 
-웹 서비스 소스, Python 분석 API, MySQL 스키마, Android 앱 프로젝트를 함께 관리합니다. 현재 웹 화면은 브라우저 저장을 중심으로 동작하며, 공개 체험판은 별도 계정 없이 주요 기능을 확인할 수 있습니다.
+## 프로젝트 핵심 가치
 
-- [프로젝트 저장소](https://github.com/kimayeong21/DigitalLegacy_ManagementService)
-- [MemoryLink 체험판](https://kimayeong21.github.io/DNights.github.io/memorylink/)
-- [개발자 포트폴리오](https://kimayeong21.github.io/DNights.github.io/)
+- 흩어진 디지털 자료를 한곳에서 관리합니다.
+- AI가 자료의 내용, 유형, 날짜, 감정, 키워드와 중요도를 분석합니다.
+- 분석 결과에 맞춰 폴더를 만들고 자료를 자동 분류합니다.
+- 중복되거나 보존 가치가 낮은 자료를 정리 대상으로 제안합니다.
+- 중요한 기록을 디지털 유품 보관함에 저장합니다.
+- 지정한 가족이나 지인에게 전달할 유품과 조건을 관리합니다.
+- 과거의 의미 있는 기록을 다시 추천해 추억을 지속적으로 회상할 수 있게 합니다.
 
-## 2. 주요 기능
+## 구현 기능
+
+### AI 기반 정리
 
 | 기능 | 설명 |
 | --- | --- |
-| 추억 관리 | 제목, 설명, 내용, 날짜, 카테고리, 중요도, 태그를 입력하고 기록을 추가·조회·수정·삭제 |
-| 이미지 등록 | 파일 선택, 드래그 앤 드롭, 클립보드 붙여넣기, 이미지 URL 입력 |
-| 검색과 필터 | 제목·설명·내용·태그 검색, 카테고리와 감정 필터, 정렬 |
-| 즐겨찾기와 복제 | 중요한 기록을 즐겨찾기로 표시하고 기존 기록을 복제하여 재사용 |
-| 일괄 관리 | 여러 기록을 선택하여 삭제 |
-| 대시보드 | 전체 기록 수, 감정별 현황, 중요도, 보관함 분포, 최근 추억 확인 |
-| 타임라인 | 기록을 연도와 월별로 탐색 |
-| 추억 다시보기 | 저장된 기록을 무작위로 열거나 날짜·감정·중요도를 바탕으로 추천 |
-| 회상 알림 | 방문 중 설정한 주기와 시간에 맞춰 회상 안내 |
-| 백업과 복원 | JSON 파일로 기록을 내보내고 백업 자료를 기존 기록과 병합 |
-| 분석 결과 표시 | 요약, 감정, 키워드, 장면, 분위기, 추억의 의미 표시 |
-| 모바일 화면 | 반응형 레이아웃과 하단 탐색 메뉴 제공 |
+| AI 유품 자동 분석 | 사진, 영상, 문서, 음성의 내용, 날짜, 유형, 감정과 키워드를 분석합니다. |
+| AI 자동 폴더 분류 | 분석된 자료를 사진, 가족, 여행, 문서, SNS 등 적합한 폴더로 분류합니다. |
+| AI 폴더 자동 생성 | 자료의 특징에 맞는 새로운 폴더를 추천하고 생성합니다. |
+| 폴더별 자동 저장 | 분석 결과에 따라 각 자료에 폴더 정보를 자동 지정합니다. |
+| 중요도 자동 산정 | 가족, 기념일, 편지, 첫 기록 등의 특징을 바탕으로 중요도를 계산합니다. |
+| 중요 유품 자동 선별 | 중요도가 높은 자료를 디지털 유품 후보로 추천합니다. |
 
-서버 코드에는 회원가입, 로그인, 로그아웃, 세션 확인과 OpenAI 분석 연동이 포함되어 있습니다. 공개 체험판에서는 서버 인증이나 실제 OpenAI 호출 대신 브라우저 저장과 로컬 예시 분석을 사용합니다. 기록은 기기 간에 자동 동기화되지 않으며, 브라우저 데이터를 삭제하면 함께 지워집니다.
+### 중복 및 불필요 자료 정리
 
-## 3. 시스템 구성
+| 기능 | 설명 |
+| --- | --- |
+| 파일 해시 검사 | 업로드 파일의 SHA-256 해시를 계산해 동일 파일을 확인합니다. |
+| 유사 자료 탐색 | 파일명, 제목과 내용의 유사도를 함께 비교합니다. |
+| 중복 그룹 관리 | 동일하거나 유사한 자료를 그룹으로 표시합니다. |
+| 정리 추천 | 중복, 낮은 중요도, 내용이 없는 자료를 정리 후보로 제안합니다. |
+| 상태 관리 | 자료를 보존, 삭제 예정, 보류, 전달 예정 상태로 관리합니다. |
+| 휴지통과 복원 | 삭제한 자료를 임시 보관하고 필요할 때 복원합니다. |
 
-| 구성 요소 | 역할 | 현재 구성 |
-| --- | --- | --- |
-| 웹 화면 | 기록 입력, 탐색, 통계, 회상 기능 | Hono에서 HTML을 제공하고 브라우저 JavaScript가 화면을 제어 |
-| 브라우저 저장소 | 기록과 사용자 설정 보관 | localStorage에 기록, 즐겨찾기, 회상 설정 저장 |
-| Hono API | 인증, 기록 관리, 파일, 통계 API | `src/index.tsx`에 라우트 구현 |
-| Python API | 분석과 통계 확장 | FastAPI와 aiomysql 기반의 별도 서버 |
-| MySQL | 사용자, 기록, 세션, 관계 데이터 구조 | 스키마와 초기 데이터, 설정 스크립트 제공 |
-| OpenAI | 외부 분석 요청 | 서버 환경 변수에 API 키가 설정된 경우 사용 |
-| Cloudflare R2 | 파일 업로드 확장 | `BUCKET` 바인딩을 사용하는 업로드·조회 API 포함 |
-| Android | 웹 화면의 앱 패키징 | Capacitor와 Gradle 기반 프로젝트 |
-| GitHub Pages | 공개 체험 화면 제공 | 정적으로 내보낸 HTML·CSS 배포 |
+### 디지털 유품 관리
 
-Hono의 데이터 접근 코드는 `DB` 바인딩을 사용하며, 바인딩이 없으면 프로세스 메모리의 대체 저장소를 사용합니다. MySQL 환경 변수를 입력하는 것만으로 Hono에 MySQL이 자동 연결되지는 않습니다. Python API에는 별도의 MySQL 연결 코드가 있습니다.
+| 기능 | 설명 |
+| --- | --- |
+| 디지털 유품 보관함 | 보존하기로 결정한 중요 자료를 별도 보관함에서 관리합니다. |
+| 전달 계획 | 수신인, 관계, 전달 조건과 전달 예정일을 설정합니다. |
+| 전달 패키지 | 전달 정보를 JSON 파일로 내려받을 수 있습니다. |
+| 전달 완료 관리 | 전달 계획의 진행 상태를 기록합니다. |
 
-현재 웹 화면은 로컬 저장 모드가 기본입니다. 서버 API의 존재와 웹 화면의 서버 영구 저장 연결은 구분해야 하며, 서버 재시작 이후에도 계정과 기록을 보존하려면 데이터베이스 연결과 화면 연동을 추가로 확인해야 합니다.
+### 추억 회상 및 탐색
 
-## 4. 프로젝트 구조
+| 기능 | 설명 |
+| --- | --- |
+| 오늘의 기억 | 날짜, 감정과 중요도를 기준으로 여러 추억을 추천합니다. |
+| 추억 타임라인 | 저장된 자료를 연도와 월 단위로 탐색합니다. |
+| AI 내용 요약 | 기록의 핵심 내용과 감정, 장면, 분위기를 요약합니다. |
+| 스마트 검색 | 제목, 내용, 태그, 날짜, 카테고리와 감정으로 검색합니다. |
+| 회상 알림 | 설정한 주기와 시간에 맞춰 다시 볼 기억을 안내합니다. |
+| 정리 현황 대시보드 | 전체 자료, 분류 완료, 중복, 정리 추천과 중요 유품 현황을 표시합니다. |
+
+### 사용자 및 자료 관리
+
+| 기능 | 설명 |
+| --- | --- |
+| 회원가입과 로그인 | 사용자별 계정과 세션을 관리합니다. |
+| 직접 파일 업로드 | 사진, 영상, 문서와 음성 파일을 직접 선택해 등록합니다. |
+| Google Drive 연동 | Google OAuth 승인 후 Drive 파일을 조회하고 가져옵니다. |
+| 폴더 직접 관리 | 폴더 생성, 이름 변경, 삭제와 자료 이동을 지원합니다. |
+| 기록 관리 | 자료 추가, 조회, 수정, 복제와 삭제를 지원합니다. |
+| 백업과 복원 | 기록을 JSON으로 내보내고 기존 데이터와 병합합니다. |
+
+## Google Drive 연결 안내
+
+Google Drive 연동 코드는 구현되어 있으며 실제 계정 연결에는 Google Cloud Console에서 발급한 OAuth 2.0 웹 클라이언트 ID가 필요합니다.
+
+1. Google Cloud 프로젝트를 생성합니다.
+2. Google Drive API를 사용 설정합니다.
+3. OAuth 동의 화면을 구성합니다.
+4. 웹 애플리케이션용 OAuth 클라이언트 ID를 생성합니다.
+5. 승인된 JavaScript 원본에 서비스 주소를 등록합니다.
+6. MemoryLink의 Google Drive 연결 화면에 클라이언트 ID를 입력합니다.
+
+API 키나 OAuth 비밀값은 GitHub 저장소에 커밋하지 않습니다.
+
+## 기술 구성
+
+| 구분 | 기술 |
+| --- | --- |
+| 웹 애플리케이션 | TypeScript, Hono, HTML, CSS, JavaScript |
+| 빌드 및 개발 서버 | Vite, Node.js |
+| 웹 API | Hono API |
+| 분석 API | Python, FastAPI |
+| 데이터베이스 | MySQL, mysql2, aiomysql |
+| AI 분석 | OpenAI API, 로컬 규칙 기반 분석 |
+| 파일 저장 확장 | Cloudflare R2 |
+| 모바일 앱 | Capacitor, Android, Gradle |
+| 배포 | Cloudflare Pages, GitHub Pages |
+
+## 프로젝트 구조
 
 ```text
 DigitalLegacy_ManagementService/
 |-- src/
-|   |-- index.tsx                 # Hono API, HTML, 브라우저 기능
-|   `-- renderer.tsx              # 렌더러 설정
+|   |-- index.tsx
+|   `-- renderer.tsx
 |-- public/static/
-|   |-- premium.css               # 최신 화면 스타일
-|   `-- style.css                 # 기본 스타일
+|   |-- feature-complete.js
+|   |-- premium.css
+|   `-- style.css
 |-- python-api/
-|   |-- main.py                   # 분석·통계 API와 MySQL 연결
-|   |-- models.py                 # 데이터 모델
-|   |-- utils.py                  # 보조 함수
-|   |-- dev.py                    # 개발 서버 실행
-|   `-- requirements.txt          # Python 의존성
-|-- android/                      # Android 앱 소스와 Gradle 설정
+|-- android/
 |-- migrations/
-|   |-- mysql_schema.sql          # 테이블 생성
-|   `-- mysql_ai_insights.sql     # 분석 컬럼 확장
-|-- db/                           # 스키마 설명과 SQL 참고 자료
+|-- db/
 |-- scripts/
-|   |-- setup-mysql.mjs           # DB·초기 데이터 설정
-|   |-- build-android-web.mjs     # Android용 웹 화면 생성
-|   |-- export-pages-demo.mjs     # 브라우저 체험판 생성
-|   `-- export-static-page.mjs    # 기본 정적 HTML 생성
-|-- .vscode/                      # 편집기 실행·디버깅 설정
-|-- .dev.vars.example             # 환경 변수 예시
-|-- capacitor.config.json         # 앱 ID와 웹 출력 경로
-|-- package.json                  # 의존성과 실행 명령
-|-- seed.mysql.sql                # 초기 데이터
-|-- vite.config.ts                # 개발·빌드 설정
-`-- wrangler.jsonc                # Cloudflare 설정
+|-- .dev.vars.example
+|-- capacitor.config.json
+|-- package.json
+|-- vite.config.ts
+`-- wrangler.jsonc
 ```
 
-`dist/`, `android-web/`, `node_modules/`와 Android 빌드 결과물은 실행 또는 빌드 과정에서 생성됩니다.
+`src/index.tsx`에는 인증, 기록 관리 API와 전체 웹 화면이 포함되어 있습니다. `public/static/feature-complete.js`에는 자동 분류, 중복 검사, 폴더 관리, 전달 패키지와 Google Drive 연동 기능이 포함되어 있습니다.
 
-## 5. 기술 스택
+## 웹 실행 방법
 
-| 분야 | 사용 기술 |
-| --- | --- |
-| 화면 | HTML, CSS, JavaScript, Tailwind CSS, Font Awesome |
-| 웹 서버 | TypeScript, Hono |
-| 빌드 | Vite, Node.js |
-| Python 서버 | Python, FastAPI, Uvicorn, Pydantic |
-| 데이터베이스 | MySQL, mysql2, aiomysql |
-| 로컬 저장 | Web Storage API의 localStorage |
-| 분석 | OpenAI API, 로컬 규칙 기반 예시 분석 |
-| Android | Capacitor 8, Java, Gradle |
-| 배포 설정 | GitHub Pages, Cloudflare Pages, Wrangler, R2 |
-| 개발 도구 | Git, GitHub, Visual Studio Code, Android Studio |
+### 준비 사항
 
-## 6. 데이터베이스 구조
+- Node.js 20 이상
+- npm
+- Git
 
-MySQL 스키마는 `migrations/mysql_schema.sql`에 정의되어 있습니다.
-
-| 테이블 | 주요 컬럼 | 역할 |
-| --- | --- | --- |
-| `users` | `id`, `email`, `password`, `name`, `avatar_url` | 사용자 계정과 프로필 |
-| `sessions` | `id`, `user_id`, `expires_at` | 로그인 세션과 만료 시간 |
-| `categories` | `id`, `name`, `icon`, `color` | 기록 분류 기준 |
-| `memories` | `id`, `user_id`, `category_id`, `title`, `description`, `content`, `file_url`, `file_type`, `tags` | 기록 본문과 첨부 자료 |
-| `connections` | `id`, `memory_id_1`, `memory_id_2`, `connection_type`, `strength` | 기록 간 관계 |
-
-`memories`에는 중요도(`importance_score`), 보관 여부(`is_archived`), 원본 날짜(`original_date`), 생성·수정 시각도 저장할 수 있습니다. 분석용 컬럼으로 `ai_summary`, `ai_sentiment`, `ai_keywords`, `ai_scene_type`, `ai_atmosphere`, `ai_felt_emotion`, `ai_image_observations`, `ai_event_story`, `ai_memory_meaning`, `ai_confidence`가 정의되어 있습니다. 컬럼 정의가 모든 실행 모드에서 해당 값을 생성하거나 저장한다는 의미는 아닙니다.
-
-사용자 한 명은 여러 세션과 기록을 가질 수 있고, 카테고리 하나에는 여러 기록이 속할 수 있습니다. `connections`는 두 기록의 ID를 참조합니다. 사용자 삭제 시 관련 세션과 기록은 함께 삭제되며, 카테고리를 삭제하면 해당 기록의 카테고리 참조는 비워집니다.
-
-즐겨찾기와 회상 설정은 현재 브라우저 저장소에서 관리합니다. 자세한 설명은 [DB 문서](./db/schema.md)를 참고하세요.
-
-## 7. 실행 방법
-
-### 웹 개발 환경
-
-Node.js와 npm이 설치된 환경에서 실행합니다.
+### 설치 및 실행
 
 ```bash
 git clone https://github.com/kimayeong21/DigitalLegacy_ManagementService.git
 cd DigitalLegacy_ManagementService
 npm install
-npm run dev -- --host 127.0.0.1 --port 4174
+npm run dev -- --host 127.0.0.1 --port 4175
 ```
 
-브라우저에서 `http://127.0.0.1:4174`에 접속합니다. 브라우저 저장 방식의 화면을 확인할 수 있으며, MySQL 연결 없이도 로컬 기능을 체험할 수 있습니다.
+브라우저에서 `http://127.0.0.1:4175`에 접속합니다.
 
-빌드와 빌드 결과 확인 명령은 다음과 같습니다.
+### 운영 빌드
 
 ```bash
 npm run build
+```
+
+### 빌드 결과 미리보기
+
+```bash
 npm run preview
 ```
 
-### MySQL 초기 설정
+## 환경 변수
 
-MySQL 서버를 준비한 뒤 `.dev.vars.example`을 `.dev.vars`로 복사하고 접속 정보를 입력합니다. 아래는 Windows PowerShell 예시입니다.
-
-```powershell
-Copy-Item .dev.vars.example .dev.vars
-```
+`.dev.vars.example`을 `.dev.vars`로 복사한 후 환경에 맞게 수정합니다.
 
 ```dotenv
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
 MYSQL_USER=root
-MYSQL_PASSWORD=your_mysql_password
+MYSQL_PASSWORD=your_password
 MYSQL_DATABASE=memorylink
+OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.2
 ```
+
+실제 비밀번호와 API 키는 저장소에 업로드하지 않습니다.
+
+## MySQL 설정
+
+MySQL 서버를 실행한 후 다음 명령으로 테이블과 초기 데이터를 구성합니다.
 
 ```bash
 npm run db:mysql:setup
 ```
 
-설정 스크립트는 테이블과 초기 데이터를 생성하고 누락된 분석 컬럼을 보완합니다. 현재 SQL 파일의 데이터베이스 이름은 `memorylink`로 고정되어 있으므로 다른 이름을 사용하려면 SQL도 함께 수정해야 합니다. 이 작업은 Hono의 DB 연결을 자동으로 구성하지 않습니다.
+| 테이블 | 역할 |
+| --- | --- |
+| users | 사용자 계정과 프로필 |
+| sessions | 로그인 세션과 만료 시간 |
+| categories | 자료 분류 기준 |
+| memories | 기록, 첨부 자료와 AI 분석 결과 |
+| connections | 기록 간 연결 관계 |
 
-### Python API 실행
-
-Python 환경에서 의존성을 설치하고 Uvicorn을 실행합니다.
+## Python 분석 API 실행
 
 ```bash
 python -m pip install -r python-api/requirements.txt
@@ -174,95 +194,63 @@ python -m uvicorn main:app --app-dir python-api --reload --host 127.0.0.1 --port
 - 상태 확인: `http://127.0.0.1:8000/health`
 - API 문서: `http://127.0.0.1:8000/docs`
 
-DB 관련 API에는 실행 중인 MySQL 서버가 필요합니다. 실제 분석을 사용하려면 `.dev.vars`에 `OPENAI_API_KEY`를 추가합니다. API 키와 실제 접속 비밀번호는 저장소에 올리지 않습니다.
+## Android 실행
 
-### Android 프로젝트 실행
-
-Android Studio, Android SDK와 JDK를 준비합니다. 현재 Android 설정은 compileSdk·targetSdk 36, minSdk 24입니다. 웹 개발 서버를 `http://127.0.0.1:4174`에서 실행한 상태로 별도 터미널에서 진행합니다.
+Android Studio, Android SDK와 JDK를 설치한 후 진행합니다.
 
 ```bash
 npm run android:sync
 npm run android:open
 ```
 
-`android:sync`는 실행 중인 웹 화면을 읽어 `android-web/`에 저장하고 Android 프로젝트에 복사합니다. 다른 주소를 사용한다면 `MEMORYLINK_DEV_URL` 환경 변수를 지정합니다. Windows에서는 SDK와 Java 설정을 마친 후 `npm run android:apk`로 디버그 APK를 빌드할 수 있습니다.
-
-### GitHub Pages 체험판 생성
+Windows에서 디버그 APK를 생성하려면 다음 명령을 사용합니다.
 
 ```bash
-npm run build
-node scripts/export-pages-demo.mjs
+npm run android:apk
 ```
 
-출력은 `dist/demo/`에 생성됩니다. 다른 출력 경로는 첫 번째 인수로 지정할 수 있습니다. 생성된 체험판은 정적 페이지이므로 계정 인증, 서버 저장, 실제 OpenAI 분석을 제공하지 않습니다.
+## 주요 API
 
-## 8. 화면 및 라우트 구성
-
-### 화면 구성
-
-웹 화면은 `/`에서 제공되며, 내부 화면 전환은 브라우저 JavaScript로 처리합니다. 대시보드·추억·타임라인이 각각 별도 URL로 제공되는 구조는 아닙니다.
-
-| 화면 | 주요 내용 |
-| --- | --- |
-| 가입·로그인 | 사용자 정보 입력과 로그인 화면. 공개 체험판에서는 생략 |
-| 오늘의 기억 | 추천 기록, 통계, 보관함 현황, 최근 추억, 회상 설정 |
-| 추억 | 검색, 필터, 정렬, 즐겨찾기, 선택 관리, 백업 복원 |
-| 타임라인 | 월별 기록 조회 |
-| 추가·수정 모달 | 파일, 제목, 설명, 태그, 날짜, 중요도 입력 |
-| 상세 모달 | 기록 본문과 분석 결과 확인 |
-| 모바일 탐색 | 홈, 추억, 추가, 타임라인, 다시보기 이동 |
-
-### Hono 라우트
-
-| 메서드 | 경로 | 역할 |
+| 메서드 | 경로 | 설명 |
 | --- | --- | --- |
-| GET | `/` | 웹 화면 |
 | POST | `/api/auth/register` | 회원가입 |
 | POST | `/api/auth/login` | 로그인 |
 | POST | `/api/auth/logout` | 로그아웃 |
 | GET | `/api/auth/me` | 현재 사용자 확인 |
-| GET | `/api/categories` | 카테고리 목록 |
-| GET, POST | `/api/memories` | 기록 목록 조회·생성 |
-| GET, PUT, DELETE | `/api/memories/:id` | 기록 상세 조회·수정·삭제 |
-| POST | `/api/upload` | R2 파일 업로드 |
-| GET | `/api/files/*` | R2 파일 조회 |
-| GET | `/api/statistics` | 기록 통계 |
-| POST | `/api/connections` | 기록 간 관계 생성 |
-| GET | `/api/export` | 기록 JSON 내보내기 |
+| GET, POST | `/api/memories` | 자료 목록 조회와 생성 |
+| GET, PUT, DELETE | `/api/memories/:id` | 자료 상세 조회, 수정과 삭제 |
+| POST | `/api/upload` | 파일 업로드 |
+| GET | `/api/statistics` | 정리 현황 통계 |
+| GET | `/api/export` | 기록 내보내기 |
 
-### Python 라우트
+## 데이터 저장 방식
 
-Python API는 Hono와 별도 프로세스에서 실행합니다.
+웹 화면은 데이터베이스 연결이 없는 환경에서도 실행할 수 있도록 브라우저 저장소를 지원합니다. 서버 DB 바인딩이 구성되면 API 저장 방식을 사용할 수 있습니다.
 
-| 메서드 | 경로 | 역할 |
-| --- | --- | --- |
-| GET | `/` | API 안내 |
-| GET | `/health` | 상태 확인 |
-| GET | `/docs` | Swagger API 문서 |
-| POST | `/api/ai/analyze` | 분석 요청 |
-| GET | `/api/memories` | MySQL 기록 조회 |
-| GET | `/api/stats/advanced` | 확장 통계 |
-| POST | `/api/memories/batch-analyze` | 기록 일괄 분석 |
+브라우저 저장소를 삭제하면 로컬 데이터도 함께 삭제됩니다. 실제 서비스 배포에서는 MySQL 연결, 서버 저장, 비밀번호 해시 정책, HTTPS와 접근 권한을 반드시 구성해야 합니다.
 
-## 9. 업그레이드 구성
+## 개발 및 검증 상태
 
-| 구분 | 반영 내용 |
-| --- | --- |
-| 기록 활용 | 즐겨찾기, 정렬, 선택 삭제, 사용자 태그 검색, 복제 |
-| 회상 경험 | 오늘의 기억 추천, 타임라인, 무작위 다시보기, 방문 중 회상 안내 |
-| 데이터 관리 | JSON 내보내기, 백업 병합 복원, 브라우저 저장 |
-| 화면 개선 | 최신 스타일, 보관함 현황, 모바일 하단 메뉴 |
-| 앱 확장 | Capacitor Android 프로젝트와 웹 화면 동기화 스크립트 |
-| 공개 체험 | GitHub Pages용 체험판 내보내기와 포트폴리오 연결 |
-| 문서 정리 | 프로젝트 구성, 실행 절차, 데이터 구조와 라우트 설명 정리 |
+- 핵심 기능표의 웹 기능 구현 완료
+- 회원가입과 로그인 흐름 확인
+- 파일 업로드 및 해시 계산 구현
+- AI 자동 분석과 폴더 생성 확인
+- 중복 및 정리 추천 화면 구현
+- 폴더 생성, 수정, 삭제와 자료 이동 구현
+- 디지털 유품 보관 및 전달 관리 구현
+- 데스크톱, 태블릿과 모바일 반응형 화면 적용
+- Vite 운영 빌드 검증 완료
 
-후속 개발 항목은 Hono와 MySQL의 영구 저장 연결, 사용자별 브라우저 데이터 분리, 서버와 브라우저의 동기화, 배포 환경의 실제 AI 분석 연결, 비밀번호 해시 방식 보완, Android 실기기 검증입니다. 회상 알림은 현재 사이트 방문 중 동작하며, 앱을 닫은 상태의 예약 알림은 별도 구현이 필요합니다.
+Google Drive 연동과 OpenAI 분석은 각 서비스의 인증 정보가 설정된 환경에서 동작합니다. Android 앱은 실제 기기 배포 전에 서명 설정과 실기기 검증이 필요합니다.
 
-## 10. 개발자
+## 개발자
 
-- 이름: 김아영
-- 소속: 서원대학교 컴퓨터공학과
-- 프로젝트: MemoryLink — AI 기반 디지털 유품 정리 서비스
+- 김아영
+- 서원대학교 컴퓨터공학과
 - GitHub: [kimayeong21](https://github.com/kimayeong21)
 - 포트폴리오: [Ayeong Kim Portfolio](https://kimayeong21.github.io/DNights.github.io/)
 - 이메일: [cngot0000@naver.com](mailto:cngot0000@naver.com)
+
+## 라이선스 및 이용 안내
+
+이 저장소는 졸업작품 개발과 시연을 위한 프로젝트입니다. 외부 배포나 상용 사용 전에는 사용 중인 API, 폰트, 아이콘과 라이브러리의 라이선스를 확인해야 합니다.
