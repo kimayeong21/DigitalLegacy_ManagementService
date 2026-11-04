@@ -394,6 +394,24 @@
     return '[MemoryLink 디지털 유산 전달]\n' + plan.recipient + '님께 전달할 디지털 유산이 준비되었습니다.\n' + folderText + (plan.message ? plan.message + '\n' : '') + 'MemoryLink에서 본인 확인 후 안전하게 전달받아 주세요.';
   }
 
+  function normalizeKoreanPhone(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('+')) return '+' + raw.slice(1).replace(/\D/g, '');
+    let digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('0082')) digits = digits.slice(2);
+    if (digits.startsWith('82')) return '+' + digits;
+    if (/^01[016789]/.test(digits)) return '+82' + digits.slice(1);
+    return digits;
+  }
+
+  function openAiSmsComposer(plan, message) {
+    const phone = normalizeKoreanPhone(plan.contact);
+    if (!phone) throw new Error('문자를 보낼 휴대폰 번호를 확인해 주세요.');
+    const separator = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? '&' : '?';
+    location.href = 'sms:' + phone + separator + 'body=' + encodeURIComponent(message);
+  }
+
   window.sendTransferSms = function (id) {
     const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
     if (!plan) return;
@@ -432,17 +450,31 @@
     if (button) { button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> AI 작성·발송 중'; }
     try {
       const folderItems = memories().filter(function (item) { return String(item.folder_name || '') === String(plan.folder_name); });
-      const response = await fetch('/api/transfers/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: plan.recipient, contact: plan.contact, condition: plan.condition, message: plan.message, folder_name: plan.folder_name, items: folderItems.map(function (item) { return { title: item.title, summary: item.ai_summary || item.description || '' }; }) }) });
+      const response = await fetch('/api/transfers/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient: plan.recipient, contact: plan.contact, condition: plan.condition, message: plan.message, folder_name: plan.folder_name, items: folderItems.map(function (item) { return { title: item.title, summary: item.ai_summary || item.description || '' }; }) })
+      });
       let result = await response.json();
       if (!response.ok && String(plan.contact || '').includes('@') && result.preview) {
         await sendAiMessageWithGmail(plan, result.preview);
         result = { success: true, channel: 'gmail', message: result.preview };
+      } else if (!response.ok && result.setup_required === 'sms' && result.preview) {
+        if (!confirm('문자 자동 발송 서비스 연결이 아직 완료되지 않았습니다. AI가 작성한 메시지를 휴대폰 문자 앱에서 바로 열까요?')) {
+          throw new Error(result.error || '문자 발송 서비스 설정이 필요합니다.');
+        }
+        openAiSmsComposer(plan, result.preview);
+        result = { success: true, channel: 'sms-app', message: result.preview, pending: true };
       } else if (!response.ok) {
         throw new Error(result.error || 'AI 전달에 실패했습니다.');
       }
-      plan.status = 'delivered'; plan.delivered_at = new Date().toISOString(); plan.delivery_channel = result.channel; plan.ai_message = result.message;
-      writeJson(KEYS.transfers, plans); window.renderTransferView();
-      alert(result.channel === 'email' || result.channel === 'gmail' ? 'AI가 Gmail로 이메일을 발송했습니다.' : 'AI가 문자를 발송했습니다.');
+      plan.status = result.pending ? 'ready' : 'delivered';
+      if (!result.pending) plan.delivered_at = new Date().toISOString();
+      plan.delivery_channel = result.channel;
+      plan.ai_message = result.message;
+      writeJson(KEYS.transfers, plans);
+      window.renderTransferView();
+      alert(result.channel === 'email' || result.channel === 'gmail' ? 'AI가 Gmail로 이메일을 발송했습니다.' : result.pending ? 'AI 메시지를 문자 앱에 준비했습니다. 문자 앱의 보내기 버튼을 눌러 주세요.' : 'AI가 문자를 발송했습니다.');
     } catch (error) {
       alert(error.message || 'AI 전달에 실패했습니다.');
       if (button) { button.disabled = false; button.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> AI로 전달'; }
@@ -739,4 +771,3 @@
   ensureModal();
   injectControls();
 })();
-
