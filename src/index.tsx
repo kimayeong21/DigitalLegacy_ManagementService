@@ -7,6 +7,11 @@ type Bindings = {
   BUCKET: R2Bucket;
   OPENAI_API_KEY: string;
   OPENAI_MODEL?: string;
+  RESEND_API_KEY?: string;
+  MEMORYLINK_FROM_EMAIL?: string;
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
+  TWILIO_FROM_NUMBER?: string;
 }
 
 type MySQLDatabase = D1Database;
@@ -1196,6 +1201,40 @@ app.get('/api/export', authMiddleware, async (c) => {
   }
   
   return c.json(exportData)
+})
+
+// Generate an AI delivery message and send it from the server.
+app.post('/api/transfers/send', authMiddleware, async (c) => {
+  const user = c.get('user')
+  const body = await c.req.json()
+  const recipient = String(body.recipient || '').trim()
+  const contact = String(body.contact || '').trim()
+  const folderName = String(body.folder_name || '').trim()
+  const condition = String(body.condition || '').trim()
+  const userMessage = String(body.message || '').trim()
+  const items = Array.isArray(body.items) ? body.items.slice(0, 50) : []
+  if (!recipient || !contact || !folderName) return c.json({ error: '수신인, 연락처, 전달 폴더가 필요합니다.' }, 400)
+  const itemSummary = items.length ? items.map((item: any) => `- ${String(item.title || '이름 없는 자료')}: ${String(item.summary || '').slice(0, 100)}`).join('\n') : '- 선택한 폴더의 디지털 유산 자료'
+  let aiMessage = [`${recipient}님께,`, '', `${user.name || 'MemoryLink 사용자'}님이 MemoryLink에 보관한 '${folderName}' 폴더를 전달합니다.`, condition ? `전달 조건: ${condition}` : '', userMessage ? `남긴 말: ${userMessage}` : '', '', '포함된 기록:', itemSummary, '', '소중한 기록을 안전하게 확인해 주세요.'].filter(Boolean).join('\n')
+  if (c.env.OPENAI_API_KEY?.trim()) {
+    try {
+      const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${c.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: c.env.OPENAI_MODEL || 'gpt-5.2', instructions: '당신은 디지털 유산 전달 도우미입니다. 제공된 사실만 사용하여 수신인에게 보낼 따뜻하고 간결한 한국어 전달 메시지를 작성하세요. 비밀번호나 인증정보를 요구하지 마세요.', input: `수신인: ${recipient}\n보내는 사람: ${user.name || 'MemoryLink 사용자'}\n폴더: ${folderName}\n조건: ${condition}\n사용자 메시지: ${userMessage}\n자료:\n${itemSummary}`, max_output_tokens: 500 }) })
+      if (response.ok) { const data: any = await response.json(); const generated = extractResponseText(data).trim(); if (generated) aiMessage = generated }
+    } catch (error) { console.error('AI transfer message fallback:', error) }
+  }
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+    if (!c.env.RESEND_API_KEY || !c.env.MEMORYLINK_FROM_EMAIL) return c.json({ error: '이메일 자동 발송 설정이 필요합니다. RESEND_API_KEY와 MEMORYLINK_FROM_EMAIL을 설정해 주세요.', preview: aiMessage }, 503)
+    const response = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${c.env.RESEND_API_KEY}` }, body: JSON.stringify({ from: c.env.MEMORYLINK_FROM_EMAIL, to: [contact], subject: `MemoryLink 디지털 유산 전달 - ${folderName}`, text: aiMessage }) })
+    if (!response.ok) return c.json({ error: '이메일 발송 서비스가 요청을 처리하지 못했습니다.', preview: aiMessage }, 502)
+    return c.json({ success: true, channel: 'email', message: aiMessage })
+  }
+  const phone = contact.replace(/[^0-9+]/g, '')
+  if (phone.length < 9) return c.json({ error: '올바른 휴대폰 번호 또는 이메일을 입력해 주세요.' }, 400)
+  if (!c.env.TWILIO_ACCOUNT_SID || !c.env.TWILIO_AUTH_TOKEN || !c.env.TWILIO_FROM_NUMBER) return c.json({ error: '문자 자동 발송 설정이 필요합니다. Twilio 계정 정보와 발신 번호를 설정해 주세요.', preview: aiMessage }, 503)
+  const form = new URLSearchParams({ To: phone, From: c.env.TWILIO_FROM_NUMBER, Body: aiMessage.slice(0, 1500) })
+  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${c.env.TWILIO_ACCOUNT_SID}/Messages.json`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': `Basic ${btoa(`${c.env.TWILIO_ACCOUNT_SID}:${c.env.TWILIO_AUTH_TOKEN}`)}` }, body: form.toString() })
+  if (!response.ok) return c.json({ error: '문자 발송 서비스가 요청을 처리하지 못했습니다.', preview: aiMessage }, 502)
+  return c.json({ success: true, channel: 'sms', message: aiMessage })
 })
 
 // ==================== Frontend ====================

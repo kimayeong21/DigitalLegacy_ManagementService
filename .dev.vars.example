@@ -8,3 +8,12 @@ MYSQL_DATABASE=memorylink
 # Optional OpenAI API key for AI analysis
 # OPENAI_API_KEY=sk-your-api-key-here
 OPENAI_MODEL=gpt-5.2
+
+# AI email delivery (Resend)
+# RESEND_API_KEY=re_your_api_key
+# MEMORYLINK_FROM_EMAIL=MemoryLink <delivery@your-verified-domain.com>
+
+# AI SMS delivery (Twilio)
+# TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# TWILIO_AUTH_TOKEN=your_auth_token
+# TWILIO_FROM_NUMBER=+12025550123
