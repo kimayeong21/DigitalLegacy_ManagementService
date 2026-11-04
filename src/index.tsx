@@ -663,6 +663,55 @@ app.post('/api/auth/register', async (c) => {
   })
 })
 
+// Restore a server session from a browser account that was already verified locally.
+// The route is disabled whenever an external database binding is configured.
+app.post('/api/auth/local-resume', async (c) => {
+  if (c.env.DB) return c.json({ error: 'Not available' }, 404)
+
+  const { email, name, avatar_url, password_hash } = await c.req.json()
+  const normalizedEmail = String(email || '').trim().toLowerCase()
+  const normalizedName = String(name || '').trim()
+  const passwordHash = String(password_hash || '').trim().toLowerCase()
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) || normalizedName.length < 2 || !/^[a-f0-9]{64}$/.test(passwordHash)) {
+    return c.json({ error: '로컬 계정 정보를 확인해 주세요.' }, 400)
+  }
+
+  const DB = await getDatabase(c.env)
+  let user: any = await DB.prepare('SELECT id FROM users WHERE email = ?').bind(normalizedEmail).first()
+  if (user && user.password !== passwordHash) {
+    return c.json({ error: '로컬 계정 인증 정보가 일치하지 않습니다.' }, 401)
+  }
+
+  if (!user) {
+    const safeAvatar = String(avatar_url || '').trim() || `https://ui-avatars.com/api/?name=${encodeURIComponent(normalizedName)}&background=315efb&color=fff`
+    const result = await DB.prepare(`
+      INSERT INTO users (email, password, name, avatar_url)
+      VALUES (?, ?, ?, ?)
+    `).bind(normalizedEmail, passwordHash, normalizedName, safeAvatar).run()
+    user = { id: result.meta.last_row_id, email: normalizedEmail, name: normalizedName, avatar_url: safeAvatar, password: passwordHash }
+  }
+
+  const sessionId = generateSessionId()
+  await DB.prepare(`
+    INSERT INTO sessions (id, user_id, expires_at)
+    VALUES (?, ?, ?)
+  `).bind(sessionId, user.id, getExpiryDate()).run()
+
+  setCookie(c, 'session_id', sessionId, {
+    httpOnly: true,
+    secure: new URL(c.req.url).protocol === 'https:',
+    sameSite: 'Lax',
+    maxAge: 7 * 24 * 60 * 60,
+    path: '/'
+  })
+
+  return c.json({
+    success: true,
+    user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url }
+  })
+})
+
 // Login
 app.post('/api/auth/login', async (c) => {
   const DB = await getDatabase(c.env)
@@ -3110,8 +3159,25 @@ app.get('/', (c) => {
                 } catch (error) {
                     const localUser = localStorage.getItem(LOCAL_USER_KEY);
                     if (localUser) {
+                        const savedUser = JSON.parse(localUser);
+                        const account = getLocalAccounts().find(function(item){ return String(item.email || '').toLowerCase() === String(savedUser.email || '').toLowerCase(); });
+                        if (account && account.password_hash) {
+                            try {
+                                const resumed = await axios.post(\`\${API_BASE}/auth/local-resume\`, {
+                                    email: account.email,
+                                    name: account.name,
+                                    avatar_url: account.avatar_url,
+                                    password_hash: account.password_hash
+                                });
+                                currentUser = resumed.data.user;
+                                localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
+                            } catch {
+                                currentUser = savedUser;
+                            }
+                        } else {
+                            currentUser = savedUser;
+                        }
                         localMode = true;
-                        currentUser = JSON.parse(localUser);
                         showMainApp();
                     } else {
                         showAuthContainer();
@@ -3236,7 +3302,17 @@ app.get('/', (c) => {
                         return;
                     }
                     localMode = true;
-                    currentUser = { id: account.id, email: account.email, name: account.name, avatar_url: account.avatar_url };
+                    try {
+                        const resumed = await axios.post(\`\${API_BASE}/auth/local-resume\`, {
+                            email: account.email,
+                            name: account.name,
+                            avatar_url: account.avatar_url,
+                            password_hash: account.password_hash
+                        });
+                        currentUser = resumed.data.user;
+                    } catch {
+                        currentUser = { id: account.id, email: account.email, name: account.name, avatar_url: account.avatar_url };
+                    }
                     localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
                     showMainApp();
                 } finally {
