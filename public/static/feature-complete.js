@@ -400,28 +400,82 @@
     showManager('Google Drive에서 가져오기', html);
   }
 
-  window.connectDriveDemo = async function () {
-    let clientId = localStorage.getItem(KEYS.googleClientId) || '';
-    if (!clientId) {
-      clientId = prompt('Google Cloud OAuth 웹 클라이언트 ID를 입력하세요.\n예: 1234-xxxx.apps.googleusercontent.com') || '';
-      if (!clientId.trim()) return alert('Drive 연결에는 Google OAuth 클라이언트 ID가 필요합니다.');
-      localStorage.setItem(KEYS.googleClientId, clientId.trim());
+  function isGoogleWebOriginAllowed() {
+    return location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  }
+
+  function driveSetupHtml(message) {
+    const clientId = localStorage.getItem(KEYS.googleClientId) || '';
+    const originAllowed = isGoogleWebOriginAllowed();
+    const originNotice = originAllowed
+      ? '<div class="feature-drive-status ok"><strong>웹 인증 가능 주소</strong><small>' + escapeHtml(location.origin) + '</small></div>'
+      : '<div class="feature-drive-status error"><strong>현재 주소에서는 Google 로그인이 차단됩니다.</strong><small>PC에서 http://127.0.0.1:4175/ 로 접속하거나 HTTPS 배포 주소를 사용하세요.</small></div>';
+    return '<div class="feature-drive-setup">' +
+      originNotice +
+      (message ? '<div class="feature-drive-message">' + escapeHtml(message) + '</div>' : '') +
+      '<label for="google-drive-client-id">Google OAuth 웹 클라이언트 ID</label>' +
+      '<input id="google-drive-client-id" type="text" value="' + escapeHtml(clientId) + '" placeholder="123456789-xxxx.apps.googleusercontent.com" autocomplete="off">' +
+      '<p>Google Cloud에서 Drive API와 OAuth 동의 화면을 설정한 뒤 승인된 JavaScript 원본에 <b>http://127.0.0.1:4175</b>와 <b>http://localhost:4175</b>를 추가하세요.</p>' +
+      '<div class="feature-manager-actions">' +
+      '<button class="legacy-primary" onclick="saveGoogleDriveSettingsAndConnect()">저장하고 Google 연결</button>' +
+      '<button onclick="resetGoogleDriveSettings()">설정 초기화</button>' +
+      '<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud 설정 열기</a>' +
+      '</div></div>';
+  }
+
+  window.openGoogleDriveSettings = function (message) {
+    showManager('Google Drive 웹 연결', driveSetupHtml(message || ''));
+  };
+
+  window.resetGoogleDriveSettings = function () {
+    localStorage.removeItem(KEYS.googleClientId);
+    window.memoryLinkDriveToken = null;
+    window.openGoogleDriveSettings('저장된 Google 연결 설정을 초기화했습니다.');
+  };
+
+  window.saveGoogleDriveSettingsAndConnect = function () {
+    const input = document.getElementById('google-drive-client-id');
+    const clientId = String(input && input.value || '').trim();
+    if (!/^[0-9]+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId)) {
+      return window.openGoogleDriveSettings('올바른 웹 클라이언트 ID를 입력하세요.');
     }
+    localStorage.setItem(KEYS.googleClientId, clientId);
+    window.startGoogleDriveConnection();
+  };
+
+  window.startGoogleDriveConnection = async function () {
+    const clientId = localStorage.getItem(KEYS.googleClientId) || '';
+    if (!clientId) return window.openGoogleDriveSettings('Google OAuth 웹 클라이언트 ID를 먼저 입력하세요.');
+    if (!isGoogleWebOriginAllowed()) return window.openGoogleDriveSettings('Google은 일반 HTTP IP 주소의 웹 로그인을 허용하지 않습니다.');
     try {
       await loadGoogleIdentity();
       const tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: clientId.trim(),
+        client_id: clientId,
         scope: 'https://www.googleapis.com/auth/drive.readonly',
         callback: async function (response) {
-          if (response.error) return alert('Google Drive 승인이 취소되었거나 실패했습니다.');
-          try { showDriveFiles(await fetchDriveFiles(response.access_token), response.access_token); }
-          catch (error) { alert(error.message); }
+          if (response.error) return window.openGoogleDriveSettings('Google 승인이 취소되었거나 실패했습니다: ' + response.error);
+          try {
+            const files = await fetchDriveFiles(response.access_token);
+            showDriveFiles(files, response.access_token);
+          } catch (error) {
+            window.openGoogleDriveSettings(error.message || 'Google Drive 파일 목록을 가져오지 못했습니다.');
+          }
+        },
+        error_callback: function (error) {
+          const type = error && error.type ? error.type : 'popup_failed';
+          window.openGoogleDriveSettings('Google 로그인 창을 열지 못했습니다: ' + type);
         }
       });
-      tokenClient.requestAccessToken();
+      tokenClient.requestAccessToken({ prompt: 'consent' });
     } catch (error) {
-      alert(error.message || 'Google Drive 연결에 실패했습니다.');
+      window.openGoogleDriveSettings(error.message || 'Google Drive 연결에 실패했습니다.');
     }
+  };
+
+  window.connectDriveDemo = function () {
+    const clientId = localStorage.getItem(KEYS.googleClientId) || '';
+    if (!clientId || !isGoogleWebOriginAllowed()) return window.openGoogleDriveSettings();
+    window.startGoogleDriveConnection();
   };
 
   window.importDriveFile = async function (index) {
@@ -477,6 +531,7 @@
     const style = document.createElement('style');
     style.id = 'feature-complete-styles';
     style.textContent = '.feature-modal{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:24px;background:rgba(12,22,45,.55);backdrop-filter:blur(8px)}.feature-modal.hidden{display:none}.feature-modal-card{width:min(880px,100%);max-height:88vh;overflow:auto;border-radius:20px;background:#fff;padding:24px;box-shadow:0 28px 80px rgba(13,31,70,.25)}.feature-modal-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid #e5eaf3}.feature-modal-head span{color:#315efb;font-size:10px;font-weight:850;letter-spacing:.16em}.feature-modal-head h3{margin-top:5px;color:#16213d;font-size:22px;font-weight:850}.feature-modal-head>button{width:38px;height:38px;border-radius:10px;background:#f2f5fa}.feature-manager-actions{display:flex;gap:8px;margin:18px 0}.feature-manager-actions button{min-height:40px;padding:0 14px;border:1px solid #dfe6f0;border-radius:10px;font-size:12px;font-weight:800}.feature-folder-row,.feature-drive-row,.feature-move-row{display:grid;grid-template-columns:38px minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:12px 0;border-top:1px solid #edf1f6}.feature-folder-row>i,.feature-drive-row>i{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:#edf2ff;color:#315efb}.feature-folder-row strong,.feature-folder-row small,.feature-drive-row strong,.feature-drive-row small,.feature-move-row strong,.feature-move-row small{display:block}.feature-folder-row small,.feature-drive-row small,.feature-move-row small{margin-top:3px;color:#768197;font-size:11px}.feature-folder-row button,.feature-drive-row button,.feature-move-row select{min-height:34px;padding:0 10px;border:1px solid #dfe6f0;border-radius:8px;background:#fff;font-size:11px;font-weight:750}.danger{color:#c34455!important}.feature-subtitle{margin-top:24px;padding-top:18px;border-top:1px solid #e5eaf3;color:#16213d;font-size:15px}.feature-move-row{grid-template-columns:minmax(0,1fr) minmax(170px,260px)}.feature-result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.feature-result-grid>*{padding:18px;border:1px solid #e1e7f0;border-radius:14px;background:#f8faff;text-align:left}.feature-result-grid strong,.feature-result-grid span,.feature-result-grid small{display:block}.feature-result-grid strong{color:#315efb;font-size:26px}.feature-result-grid span{margin-top:5px;font-size:13px;font-weight:800}.feature-result-grid small{margin-top:4px;color:#768197;font-size:10px}.feature-cleanup-list{margin-top:16px}.feature-cleanup-list article{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:12px 0;border-top:1px solid #edf1f6}.feature-cleanup-list strong,.feature-cleanup-list small{display:block}.feature-cleanup-list small{margin-top:3px;color:#768197;font-size:11px}.feature-cleanup-list button,.feature-plan button{min-height:32px;padding:0 9px;border:1px solid #dfe6f0;border-radius:8px;background:#fff;font-size:10px;font-weight:750}.feature-ai-results{margin-bottom:16px}.feature-duplicate-group{margin-top:15px;padding:14px;border:1px solid #e1e7f0;border-radius:14px}.feature-duplicate-group h4{color:#315efb}.feature-duplicate-group>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #edf1f6}.feature-duplicate-group strong,.feature-duplicate-group small{display:block}.feature-duplicate-group small{color:#768197}.feature-duplicate-group em{color:#315efb;font-size:11px;font-style:normal;font-weight:800}.feature-empty{padding:32px;text-align:center;color:#768197}.feature-plan{display:flex!important;align-items:center;justify-content:space-between}.feature-plan>div:last-child{display:flex;gap:6px}@media(max-width:1150px) and (min-width:769px){#main-app>header #user-name{display:none!important}#main-app>header>div>div:last-child{flex:0 0 auto!important;min-width:44px!important}#main-app>header>div>div:last-child>button{width:44px!important;min-width:44px!important;padding:0!important;font-size:0!important}#main-app>header>div>div:last-child>button i{font-size:15px!important;margin:0!important}}@media(max-width:700px){.feature-result-grid{grid-template-columns:1fr}.feature-folder-row,.feature-drive-row{grid-template-columns:36px 1fr}.feature-folder-row button,.feature-drive-row button{grid-column:2}.feature-move-row{grid-template-columns:1fr}.feature-cleanup-list article{grid-template-columns:1fr 1fr}.feature-cleanup-list article>div{grid-column:1/-1}.feature-modal-card{padding:18px}.feature-plan{align-items:flex-start;flex-direction:column}}';
+    style.textContent += '.feature-drive-setup{padding:18px 0}.feature-drive-setup label{display:block;margin:18px 0 7px;color:#16213d;font-size:12px;font-weight:850}.feature-drive-setup input{width:100%;min-height:48px;padding:0 14px;border:1px solid #d8e0ec;border-radius:11px;background:#fff;color:#16213d;font-size:13px}.feature-drive-setup p{margin-top:10px;color:#657087;font-size:11px;line-height:1.7}.feature-drive-status{padding:14px;border-radius:12px}.feature-drive-status strong,.feature-drive-status small{display:block}.feature-drive-status small{margin-top:4px}.feature-drive-status.ok{background:#eef8f3;color:#16734b}.feature-drive-status.error{background:#fff1f2;color:#b4233c}.feature-drive-message{margin-top:12px;padding:12px;border-radius:10px;background:#fff7e8;color:#8b5a00;font-size:12px}.feature-drive-setup .feature-manager-actions{align-items:center;flex-wrap:wrap}.feature-drive-setup .feature-manager-actions a{padding:11px 14px;border-radius:10px;color:#315efb;font-size:12px;font-weight:800;text-decoration:none}';
     document.head.appendChild(style);
   }
 
