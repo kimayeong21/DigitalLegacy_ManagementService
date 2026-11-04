@@ -1338,7 +1338,22 @@ app.post('/api/transfers/send', authMiddleware, async (c) => {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': `Basic ${btoa(`${c.env.TWILIO_ACCOUNT_SID}:${c.env.TWILIO_AUTH_TOKEN}`)}` },
     body: form.toString()
   })
-  if (!response.ok) return c.json({ error: '문자 발송 서비스가 요청을 처리하지 못했습니다.', preview: aiMessage }, 502)
+  if (!response.ok) {
+    const providerError: any = await response.json().catch(() => ({}))
+    const providerCode = Number(providerError.code || 0)
+    const errorByCode: Record<number, string> = {
+      20003: 'Twilio 계정 인증에 실패했습니다. Account SID와 Auth Token을 다시 확인해 주세요.',
+      21211: '수신 휴대폰 번호 형식이 올바르지 않습니다. 010 번호 또는 +82 국가번호 형식으로 입력해 주세요.',
+      21408: 'Twilio에서 한국 문자 발송 권한이 허용되지 않았습니다. Messaging Geographic Permissions에서 South Korea를 허용해 주세요.',
+      21606: '현재 Twilio 발신 번호를 API 문자 발송에 사용할 수 없습니다. SMS 기능이 있는 활성 발신 번호가 필요합니다.',
+      21608: 'Twilio 체험판에서는 인증된 수신 번호로만 문자를 보낼 수 있습니다. Twilio에서 이 휴대폰 번호를 먼저 인증해 주세요.',
+      14111: 'Twilio 체험판에서 인증되지 않은 수신 번호입니다. Twilio의 Verified recipients에 번호를 등록해 주세요.'
+    }
+    const userError = errorByCode[providerCode]
+      || `Twilio 문자 발송이 거절되었습니다${providerCode ? ` (오류 ${providerCode})` : ''}. 체험판의 수신 번호 인증과 국가 제한을 확인해 주세요.`
+    console.error('Twilio send failed', { status: response.status, code: providerCode, message: String(providerError.message || '').slice(0, 200) })
+    return c.json({ error: userError, provider_code: providerCode || undefined, preview: aiMessage }, 502)
+  }
   return c.json({ success: true, channel: 'sms', message: aiMessage })
 })
 
