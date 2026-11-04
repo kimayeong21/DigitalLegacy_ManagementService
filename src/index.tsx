@@ -1211,6 +1211,7 @@ app.post('/api/transfers/send', authMiddleware, async (c) => {
   const contact = String(body.contact || '').trim()
   const folderName = String(body.folder_name || '').trim()
   const condition = String(body.condition || '').trim()
+  const scheduledDate = String(body.scheduled_date || '').trim()
   const userMessage = String(body.message || '').trim()
   const items = Array.isArray(body.items) ? body.items.slice(0, 50) : []
 
@@ -1226,6 +1227,8 @@ app.post('/api/transfers/send', authMiddleware, async (c) => {
     '',
     `${user.name || 'MemoryLink 사용자'}님이 MemoryLink에 보관한 '${folderName}' 폴더를 전달합니다.`,
     condition ? `전달 조건: ${condition}` : '',
+    scheduledDate ? `지정 전달일: ${scheduledDate}` : '',
+    `발신 사용자 아이디: ${user.email || user.id}`,
     userMessage ? `남긴 말: ${userMessage}` : '',
     '',
     '포함된 기록:',
@@ -1242,7 +1245,7 @@ app.post('/api/transfers/send', authMiddleware, async (c) => {
         body: JSON.stringify({
           model: c.env.OPENAI_MODEL || 'gpt-5.2',
           instructions: '당신은 디지털 유산 전달 도우미입니다. 제공된 사실만 사용하여 수신인에게 보낼 따뜻하고 간결한 한국어 전달 메시지를 작성하세요. 비밀번호나 인증정보를 요구하지 마세요.',
-          input: `수신인: ${recipient}\n보내는 사람: ${user.name || 'MemoryLink 사용자'}\n폴더: ${folderName}\n조건: ${condition}\n사용자 메시지: ${userMessage}\n자료:\n${itemSummary}`,
+          input: `수신인: ${recipient}\n보내는 사람: ${user.name || 'MemoryLink 사용자'} (${user.email || user.id})\n폴더: ${folderName}\n조건: ${condition}\n지정 전달일: ${scheduledDate}\n사용자 메시지: ${userMessage}\n자료:\n${itemSummary}`,
           max_output_tokens: 500
         })
       })
