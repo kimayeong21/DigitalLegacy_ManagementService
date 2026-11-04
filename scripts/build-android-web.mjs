@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const outputDir = path.join(projectRoot, 'android-web')
-const sourceUrl = process.env.MEMORYLINK_DEV_URL || 'http://127.0.0.1:4174/'
+const sourceUrl = process.env.MEMORYLINK_DEV_URL || 'http://127.0.0.1:4175/'
 
 const response = await fetch(sourceUrl)
 if (!response.ok) {
@@ -13,7 +13,8 @@ if (!response.ok) {
 
 let html = await response.text()
 html = html
-  .replace('href="/static/premium.css"', 'href="./static/premium.css"')
+  .replaceAll('href="/static/', 'href="./static/')
+  .replaceAll('src="/static/', 'src="./static/')
   .replace("navigator.serviceWorker.register('/sw.js')", "navigator.serviceWorker.register('./sw.js')")
   .replace('<head>', '<head>\n        <meta name="mobile-web-app-capable" content="yes">')
 
