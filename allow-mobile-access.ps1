@@ -20,6 +20,12 @@ if (-not $existing) {
     New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort 4175 -Profile Private | Out-Null
 }
 
+$publicRuleName = 'MemoryLink LAN 4175 Public LocalSubnet'
+$publicRule = Get-NetFirewallRule -DisplayName $publicRuleName -ErrorAction SilentlyContinue
+if (-not $publicRule) {
+    New-NetFirewallRule -DisplayName $publicRuleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort 4175 -Profile Public -RemoteAddress LocalSubnet | Out-Null
+}
+
 $lanAddress = Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object {
         $_.IPAddress -notlike '127.*' -and
@@ -33,4 +39,5 @@ if ($lanAddress) {
     Write-Host "휴대폰 접속 주소: http://${lanAddress}:4175/"
 }
 Write-Host 'PC와 휴대폰이 같은 Wi-Fi 또는 같은 공유기에 연결되어 있어야 합니다.'
+Write-Host '공용 네트워크에서는 같은 로컬 서브넷의 기기만 허용됩니다.'
 Read-Host '창을 닫으려면 Enter 키를 누르세요'
