@@ -8,6 +8,8 @@
     googleClientId: 'memorylink_google_client_id'
   };
 
+  const GOOGLE_WEB_CLIENT_ID = '647175100510-q06nfffg5j7vmjdigtv9qu07oevdt9df.apps.googleusercontent.com';
+
   const CATEGORY_RULES = [
     { id: 1, name: '사진', words: ['사진', '가족', '여행', '풍경', '앨범', '졸업', '결혼', '반려동물'], types: ['image/'] },
     { id: 2, name: '동영상', words: ['영상', '동영상', '촬영', '클립'], types: ['video/'] },
@@ -405,7 +407,6 @@
   }
 
   function driveSetupHtml(message) {
-    const clientId = localStorage.getItem(KEYS.googleClientId) || '';
     const originAllowed = isGoogleWebOriginAllowed();
     const originNotice = originAllowed
       ? '<div class="feature-drive-status ok"><strong>웹 인증 가능 주소</strong><small>' + escapeHtml(location.origin) + '</small></div>'
@@ -413,13 +414,9 @@
     return '<div class="feature-drive-setup">' +
       originNotice +
       (message ? '<div class="feature-drive-message">' + escapeHtml(message) + '</div>' : '') +
-      '<label for="google-drive-client-id">Google OAuth 웹 클라이언트 ID</label>' +
-      '<input id="google-drive-client-id" type="text" value="' + escapeHtml(clientId) + '" placeholder="123456789-xxxx.apps.googleusercontent.com" autocomplete="off">' +
-      '<p>Google Cloud에서 Drive API와 OAuth 동의 화면을 설정한 뒤 승인된 JavaScript 원본에 <b>http://127.0.0.1:4175</b>와 <b>http://localhost:4175</b>를 추가하세요.</p>' +
+      '<div class="feature-drive-status ok"><strong>Google Drive 연결 준비 완료</strong><small>Google 계정을 선택하면 읽기 전용으로 연결됩니다. MemoryLink에는 Google 비밀번호가 저장되지 않습니다.</small></div>' +
       '<div class="feature-manager-actions">' +
-      '<button class="legacy-primary" onclick="saveGoogleDriveSettingsAndConnect()">저장하고 Google 연결</button>' +
-      '<button onclick="resetGoogleDriveSettings()">설정 초기화</button>' +
-      '<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud 설정 열기</a>' +
+      '<button class="legacy-primary" onclick="startGoogleDriveConnection()">Google 계정으로 연결</button>' +
       '</div></div>';
   }
 
@@ -444,8 +441,7 @@
   };
 
   window.startGoogleDriveConnection = async function () {
-    const clientId = localStorage.getItem(KEYS.googleClientId) || '';
-    if (!clientId) return window.openGoogleDriveSettings('Google OAuth 웹 클라이언트 ID를 먼저 입력하세요.');
+    const clientId = GOOGLE_WEB_CLIENT_ID;
     if (!isGoogleWebOriginAllowed()) return window.openGoogleDriveSettings('Google은 일반 HTTP IP 주소의 웹 로그인을 허용하지 않습니다.');
     try {
       await loadGoogleIdentity();
@@ -466,15 +462,14 @@
           window.openGoogleDriveSettings('Google 로그인 창을 열지 못했습니다: ' + type);
         }
       });
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      tokenClient.requestAccessToken({ prompt: 'select_account' });
     } catch (error) {
       window.openGoogleDriveSettings(error.message || 'Google Drive 연결에 실패했습니다.');
     }
   };
 
   window.connectDriveDemo = function () {
-    const clientId = localStorage.getItem(KEYS.googleClientId) || '';
-    if (!clientId || !isGoogleWebOriginAllowed()) return window.openGoogleDriveSettings();
+    if (!isGoogleWebOriginAllowed()) return window.openGoogleDriveSettings();
     window.startGoogleDriveConnection();
   };
 
