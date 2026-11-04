@@ -340,7 +340,7 @@
   }
 
   function transferFolderNames() {
-    const names = memories().map(function (item) { return String(item.folder_name || '').trim(); }).filter(Boolean);
+    const names = folders().map(function (folder) { return String(folder.name || '').trim(); }).concat(memories().map(function (item) { return String(item.folder_name || '').trim(); })).filter(Boolean);
     return Array.from(new Set(names)).sort(function (a, b) { return a.localeCompare(b, 'ko'); });
   }
 
@@ -349,6 +349,25 @@
     const count = memories().filter(function (item) { return String(item.folder_name || '') === String(name); }).length;
     return name + ' · ' + count + '개 자료';
   }
+
+  window.openTransferFolderPicker = function () {
+    const names = transferFolderNames();
+    const html = names.length ? '<div class="feature-transfer-folder-grid">' + names.map(function (name) {
+      const count = memories().filter(function (item) { return String(item.folder_name || '') === String(name); }).length;
+      return '<button type="button" data-folder="' + escapeHtml(name) + '" onclick="chooseTransferFolder(this.dataset.folder)"><i class="fas fa-folder"></i><strong>' + escapeHtml(name) + '</strong><small>' + count + '개 자료</small></button>';
+    }).join('') + '</div>' : '<div class="feature-empty"><i class="fas fa-folder-open"></i><p>선택할 폴더가 없습니다. 먼저 폴더를 만들어 주세요.</p></div>';
+    showManager('전달할 폴더 선택', html);
+  };
+
+  window.chooseTransferFolder = function (name) {
+    const input = document.querySelector('.legacy-form input[name="folder_name"]');
+    const button = document.getElementById('transfer-folder-picker-button');
+    if (!input || !button) return;
+    input.value = name;
+    button.classList.add('selected');
+    button.innerHTML = '<i class="fas fa-folder"></i><span><strong>' + escapeHtml(name) + '</strong><small>' + escapeHtml(transferFolderLabel(name)) + '</small></span><i class="fas fa-chevron-right"></i>';
+    window.closeFeatureManager();
+  };
 
   window.saveTransferPlan = function (event) {
     event.preventDefault();
@@ -414,16 +433,48 @@
     try {
       const folderItems = memories().filter(function (item) { return String(item.folder_name || '') === String(plan.folder_name); });
       const response = await fetch('/api/transfers/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: plan.recipient, contact: plan.contact, condition: plan.condition, message: plan.message, folder_name: plan.folder_name, items: folderItems.map(function (item) { return { title: item.title, summary: item.ai_summary || item.description || '' }; }) }) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'AI 전달에 실패했습니다.');
+      let result = await response.json();
+      if (!response.ok && String(plan.contact || '').includes('@') && result.preview) {
+        await sendAiMessageWithGmail(plan, result.preview);
+        result = { success: true, channel: 'gmail', message: result.preview };
+      } else if (!response.ok) {
+        throw new Error(result.error || 'AI 전달에 실패했습니다.');
+      }
       plan.status = 'delivered'; plan.delivered_at = new Date().toISOString(); plan.delivery_channel = result.channel; plan.ai_message = result.message;
       writeJson(KEYS.transfers, plans); window.renderTransferView();
-      alert(result.channel === 'email' ? 'AI가 이메일을 발송했습니다.' : 'AI가 문자를 발송했습니다.');
+      alert(result.channel === 'email' || result.channel === 'gmail' ? 'AI가 Gmail로 이메일을 발송했습니다.' : 'AI가 문자를 발송했습니다.');
     } catch (error) {
       alert(error.message || 'AI 전달에 실패했습니다.');
       if (button) { button.disabled = false; button.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> AI로 전달'; }
     }
   };
+
+  function encodeBase64Url(text) {
+    const bytes = new TextEncoder().encode(text);
+    let binary = '';
+    for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(index, index + 0x8000));
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function sendAiMessageWithGmail(plan, message) {
+    await loadGoogleIdentity();
+    return new Promise(function (resolve, reject) {
+      const tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_WEB_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/gmail.send',
+        callback: async function (tokenResponse) {
+          if (tokenResponse.error) return reject(new Error('Gmail 발송 권한을 승인하지 못했습니다.'));
+          const subject = 'MemoryLink 디지털 유산 전달 - ' + plan.folder_name;
+          const mime = ['To: ' + plan.contact, 'Subject: =?UTF-8?B?' + btoa(unescape(encodeURIComponent(subject))) + '?=', 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', '', message].join('\r\n');
+          const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tokenResponse.access_token }, body: JSON.stringify({ raw: encodeBase64Url(mime) }) });
+          if (!response.ok) return reject(new Error('Gmail이 이메일을 발송하지 못했습니다. Gmail API 설정을 확인해 주세요.'));
+          resolve();
+        },
+        error_callback: function () { reject(new Error('Google 계정 선택 창을 열지 못했습니다.')); }
+      });
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    });
+  }
 
   window.shareTransferFolder = async function (id) {
     const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
@@ -479,7 +530,7 @@
     if (form && !form.elements.folder_name) {
       const messageLabel = form.querySelector('textarea[name="message"]');
       const label = document.createElement('label');
-      label.innerHTML = '전달할 폴더<select name="folder_name" required><option value="" selected disabled>전달할 폴더를 선택하세요</option>' + transferFolderNames().map(function (name) { return '<option value="' + escapeHtml(name) + '">' + escapeHtml(transferFolderLabel(name)) + '</option>'; }).join('') + '</select><small>사용자가 선택한 폴더의 자료만 전달되며, 계획 저장만으로는 발송되지 않습니다.</small>';
+      label.innerHTML = '전달할 폴더<input type="hidden" name="folder_name" required><button id="transfer-folder-picker-button" class="feature-folder-picker" type="button" onclick="openTransferFolderPicker()"><i class="fas fa-folder-open"></i><span><strong>폴더 선택 창 열기</strong><small>전달할 폴더를 직접 선택하세요.</small></span><i class="fas fa-chevron-right"></i></button><small>선택한 폴더의 자료만 AI가 수신인에게 전달합니다.</small>';
       if (messageLabel && messageLabel.parentElement) form.insertBefore(label, messageLabel.parentElement);
     }
     const existing = root.querySelector('.legacy-plan-list');
@@ -644,6 +695,7 @@
     style.textContent = '.feature-modal{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:24px;background:rgba(12,22,45,.55);backdrop-filter:blur(8px)}.feature-modal.hidden{display:none}.feature-modal-card{width:min(880px,100%);max-height:88vh;overflow:auto;border-radius:20px;background:#fff;padding:24px;box-shadow:0 28px 80px rgba(13,31,70,.25)}.feature-modal-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid #e5eaf3}.feature-modal-head span{color:#315efb;font-size:10px;font-weight:850;letter-spacing:.16em}.feature-modal-head h3{margin-top:5px;color:#16213d;font-size:22px;font-weight:850}.feature-modal-head>button{width:38px;height:38px;border-radius:10px;background:#f2f5fa}.feature-manager-actions{display:flex;gap:8px;margin:18px 0}.feature-manager-actions button{min-height:40px;padding:0 14px;border:1px solid #dfe6f0;border-radius:10px;font-size:12px;font-weight:800}.feature-folder-row,.feature-drive-row,.feature-move-row{display:grid;grid-template-columns:38px minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:12px 0;border-top:1px solid #edf1f6}.feature-folder-row>i,.feature-drive-row>i{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:#edf2ff;color:#315efb}.feature-folder-row strong,.feature-folder-row small,.feature-drive-row strong,.feature-drive-row small,.feature-move-row strong,.feature-move-row small{display:block}.feature-folder-row small,.feature-drive-row small,.feature-move-row small{margin-top:3px;color:#768197;font-size:11px}.feature-folder-row button,.feature-drive-row button,.feature-move-row select{min-height:34px;padding:0 10px;border:1px solid #dfe6f0;border-radius:8px;background:#fff;font-size:11px;font-weight:750}.danger{color:#c34455!important}.feature-subtitle{margin-top:24px;padding-top:18px;border-top:1px solid #e5eaf3;color:#16213d;font-size:15px}.feature-move-row{grid-template-columns:minmax(0,1fr) minmax(170px,260px)}.feature-result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.feature-result-grid>*{padding:18px;border:1px solid #e1e7f0;border-radius:14px;background:#f8faff;text-align:left}.feature-result-grid strong,.feature-result-grid span,.feature-result-grid small{display:block}.feature-result-grid strong{color:#315efb;font-size:26px}.feature-result-grid span{margin-top:5px;font-size:13px;font-weight:800}.feature-result-grid small{margin-top:4px;color:#768197;font-size:10px}.feature-cleanup-list{margin-top:16px}.feature-cleanup-list article{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:12px 0;border-top:1px solid #edf1f6}.feature-cleanup-list strong,.feature-cleanup-list small{display:block}.feature-cleanup-list small{margin-top:3px;color:#768197;font-size:11px}.feature-cleanup-list button,.feature-plan button{min-height:32px;padding:0 9px;border:1px solid #dfe6f0;border-radius:8px;background:#fff;font-size:10px;font-weight:750}.feature-ai-results{margin-bottom:16px}.feature-duplicate-group{margin-top:15px;padding:14px;border:1px solid #e1e7f0;border-radius:14px}.feature-duplicate-group h4{color:#315efb}.feature-duplicate-group>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #edf1f6}.feature-duplicate-group strong,.feature-duplicate-group small{display:block}.feature-duplicate-group small{color:#768197}.feature-duplicate-group em{color:#315efb;font-size:11px;font-style:normal;font-weight:800}.feature-empty{padding:32px;text-align:center;color:#768197}.feature-plan{display:flex!important;align-items:center;justify-content:space-between}.feature-plan>div:last-child{display:flex;gap:6px}@media(max-width:1150px) and (min-width:769px){#main-app>header #user-name{display:none!important}#main-app>header>div>div:last-child{flex:0 0 auto!important;min-width:44px!important}#main-app>header>div>div:last-child>button{width:44px!important;min-width:44px!important;padding:0!important;font-size:0!important}#main-app>header>div>div:last-child>button i{font-size:15px!important;margin:0!important}}@media(max-width:700px){.feature-result-grid{grid-template-columns:1fr}.feature-folder-row,.feature-drive-row{grid-template-columns:36px 1fr}.feature-folder-row button,.feature-drive-row button{grid-column:2}.feature-move-row{grid-template-columns:1fr}.feature-cleanup-list article{grid-template-columns:1fr 1fr}.feature-cleanup-list article>div{grid-column:1/-1}.feature-modal-card{padding:18px}.feature-plan{align-items:flex-start;flex-direction:column}}';
     style.textContent += '.feature-drive-setup{padding:18px 0}.feature-drive-setup label{display:block;margin:18px 0 7px;color:#16213d;font-size:12px;font-weight:850}.feature-drive-setup input{width:100%;min-height:48px;padding:0 14px;border:1px solid #d8e0ec;border-radius:11px;background:#fff;color:#16213d;font-size:13px}.feature-drive-setup p{margin-top:10px;color:#657087;font-size:11px;line-height:1.7}.feature-drive-status{padding:14px;border-radius:12px}.feature-drive-status strong,.feature-drive-status small{display:block}.feature-drive-status small{margin-top:4px}.feature-drive-status.ok{background:#eef8f3;color:#16734b}.feature-drive-status.error{background:#fff1f2;color:#b4233c}.feature-drive-message{margin-top:12px;padding:12px;border-radius:10px;background:#fff7e8;color:#8b5a00;font-size:12px}.feature-drive-setup .feature-manager-actions{align-items:center;flex-wrap:wrap}.feature-drive-setup .feature-manager-actions a{padding:11px 14px;border-radius:10px;color:#315efb;font-size:12px;font-weight:800;text-decoration:none}';
     style.textContent += '.legacy-form label>small{color:#8791a5;font-size:10px;font-weight:600}.feature-plan-folder{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:7px;background:#edf2ff;color:#315efb;font-size:10px;font-weight:800}.feature-plan-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}.feature-plan-actions button{white-space:nowrap}.feature-plan-actions button i{margin-right:4px}.feature-plan-actions .feature-send-now{border-color:#315efb;background:#315efb;color:#fff}.feature-delivered{display:inline-flex;align-items:center;gap:5px;padding:8px 10px;border-radius:8px;background:#eaf8f1;color:#16734b;font-size:10px;font-weight:850}@media(max-width:700px){.feature-plan-actions{width:100%;justify-content:flex-start}.feature-plan-actions button{flex:1 1 calc(50% - 6px)}.feature-plan-actions .feature-send-now{flex-basis:100%}}';
+    style.textContent += '.feature-folder-picker{width:100%;display:grid;grid-template-columns:38px minmax(0,1fr) 20px;align-items:center;gap:10px;padding:12px!important;border:1px solid #d8e0ec!important;border-radius:10px!important;background:#fff!important;text-align:left}.feature-folder-picker>i:first-child{width:38px;height:38px;display:grid;place-items:center;border-radius:9px;background:#edf2ff;color:#315efb}.feature-folder-picker span,.feature-folder-picker strong,.feature-folder-picker small{display:block}.feature-folder-picker strong{color:#16213d;font-size:12px}.feature-folder-picker small{margin-top:3px;color:#7a8599;font-size:10px}.feature-folder-picker>i:last-child{color:#9aa4b6}.feature-folder-picker.selected{border-color:#315efb!important;background:#f8faff!important}.feature-transfer-folder-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding-top:18px}.feature-transfer-folder-grid button{display:grid;grid-template-columns:42px 1fr;gap:3px 10px;align-items:center;padding:16px;border:1px solid #dfe6f0;border-radius:14px;background:#fff;text-align:left}.feature-transfer-folder-grid button:hover{border-color:#315efb;background:#f6f8ff}.feature-transfer-folder-grid i{grid-row:1/3;width:42px;height:42px;display:grid;place-items:center;border-radius:10px;background:#edf2ff;color:#315efb}.feature-transfer-folder-grid strong{font-size:13px}.feature-transfer-folder-grid small{color:#7a8599;font-size:10px}@media(max-width:700px){.feature-transfer-folder-grid{grid-template-columns:1fr}}';
     document.head.appendChild(style);
   }
 
