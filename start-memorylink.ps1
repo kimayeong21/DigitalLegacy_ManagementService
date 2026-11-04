@@ -6,9 +6,14 @@ $pidPath = Join-Path $runtimeDir 'memorylink-server.pid'
 
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 
-$listener = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 4175 -State Listen -ErrorAction SilentlyContinue
+$listener = Get-NetTCPConnection -LocalPort 4175 -State Listen -ErrorAction SilentlyContinue
 if ($listener) {
-    Write-Host 'MemoryLink가 이미 http://127.0.0.1:4175 에서 실행 중입니다.'
+    $lanAddress = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254*' -and $_.InterfaceAlias -notmatch 'WSL|Hyper-V|Loopback' } |
+        Select-Object -First 1 -ExpandProperty IPAddress)
+    Write-Host 'MemoryLink가 이미 실행 중입니다.'
+    Write-Host 'PC 주소: http://127.0.0.1:4175/'
+    if ($lanAddress) { Write-Host "모바일 주소: http://${lanAddress}:4175/" }
     exit 0
 }
 
@@ -25,7 +30,12 @@ for ($attempt = 0; $attempt -lt 20; $attempt++) {
     try {
         $response = Invoke-WebRequest -Uri 'http://127.0.0.1:4175/' -UseBasicParsing -TimeoutSec 2
         if ($response.StatusCode -eq 200) {
-            Write-Host 'MemoryLink가 백그라운드에서 실행되었습니다: http://127.0.0.1:4175/'
+            $lanAddress = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254*' -and $_.InterfaceAlias -notmatch 'WSL|Hyper-V|Loopback' } |
+                Select-Object -First 1 -ExpandProperty IPAddress)
+            Write-Host 'MemoryLink가 백그라운드에서 실행되었습니다.'
+            Write-Host 'PC 주소: http://127.0.0.1:4175/'
+            if ($lanAddress) { Write-Host "모바일 주소: http://${lanAddress}:4175/" }
             exit 0
         }
     } catch {

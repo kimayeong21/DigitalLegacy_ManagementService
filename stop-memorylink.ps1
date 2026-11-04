@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $pidPath = Join-Path $projectRoot '.runtime\memorylink-server.pid'
 
-$listener = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 4175 -State Listen -ErrorAction SilentlyContinue
+$listener = Get-NetTCPConnection -LocalPort 4175 -State Listen -ErrorAction SilentlyContinue
 if (-not $listener) {
     Write-Host '실행 중인 MemoryLink 서버가 없습니다.'
     exit 0
