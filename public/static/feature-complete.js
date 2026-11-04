@@ -353,6 +353,7 @@
   window.saveTransferPlan = function (event) {
     event.preventDefault();
     const form = event.target;
+    if (!form.folder_name || !form.folder_name.value) return alert('전달할 폴더를 직접 선택해 주세요.');
     const plans = readJson(KEYS.transfers, []);
     plans.unshift({ id: Date.now(), recipient: form.recipient.value.trim(), contact: form.contact.value.trim(), condition: form.condition.value, message: form.message.value.trim(), folder_name: form.folder_name ? form.folder_name.value : '', status: 'saved', created_at: new Date().toISOString() });
     writeJson(KEYS.transfers, plans);
@@ -377,6 +378,7 @@
   window.sendTransferSms = function (id) {
     const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
     if (!plan) return;
+    if (!plan.folder_name) return alert('전달할 폴더가 선택된 계획을 새로 저장해 주세요.');
     if (String(plan.contact || '').includes('@')) return alert('이 전달 계획에는 이메일이 입력되어 있습니다. 이메일 보내기를 이용해 주세요.');
     const phone = String(plan.contact || '').replace(/[^0-9+]/g, '');
     if (phone.length < 9) return alert('문자를 보낼 올바른 휴대폰 번호를 연락처에 입력해 주세요.');
@@ -388,6 +390,7 @@
   window.sendTransferEmail = function (id) {
     const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
     if (!plan) return;
+    if (!plan.folder_name) return alert('전달할 폴더가 선택된 계획을 새로 저장해 주세요.');
     const email = String(plan.contact || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('이메일을 보내려면 연락처에 올바른 이메일 주소를 입력해 주세요.');
     const subject = 'MemoryLink 디지털 유산 전달 - ' + (plan.folder_name || '전달 예정 자료');
@@ -405,6 +408,7 @@
   window.shareTransferFolder = async function (id) {
     const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
     if (!plan) return;
+    if (!plan.folder_name) return alert('전달할 폴더가 선택된 계획을 새로 저장해 주세요.');
     const file = new File([JSON.stringify(transferPackage(plan), null, 2)], 'MemoryLink-' + (plan.folder_name || 'legacy') + '.json', { type: 'application/json' });
     if (!navigator.share) return window.downloadTransferPackage(id);
     try {
@@ -450,10 +454,12 @@
     if (!root) return;
     const plans = readJson(KEYS.transfers, []);
     const form = root.querySelector('.legacy-form');
+    const summary = root.querySelector('.legacy-summary-card');
+    if (summary) summary.remove();
     if (form && !form.elements.folder_name) {
       const messageLabel = form.querySelector('textarea[name="message"]');
       const label = document.createElement('label');
-      label.innerHTML = '전달할 폴더<select name="folder_name"><option value="">전달 예정 자료 전체</option>' + transferFolderNames().map(function (name) { return '<option value="' + escapeHtml(name) + '">' + escapeHtml(transferFolderLabel(name)) + '</option>'; }).join('') + '</select><small>폴더를 선택하면 해당 폴더의 자료만 패키지에 포함됩니다.</small>';
+      label.innerHTML = '전달할 폴더<select name="folder_name" required><option value="" selected disabled>전달할 폴더를 선택하세요</option>' + transferFolderNames().map(function (name) { return '<option value="' + escapeHtml(name) + '">' + escapeHtml(transferFolderLabel(name)) + '</option>'; }).join('') + '</select><small>사용자가 선택한 폴더의 자료만 전달되며, 계획 저장만으로는 발송되지 않습니다.</small>';
       if (messageLabel && messageLabel.parentElement) form.insertBefore(label, messageLabel.parentElement);
     }
     const existing = root.querySelector('.legacy-plan-list');
