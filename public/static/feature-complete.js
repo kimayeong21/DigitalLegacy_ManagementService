@@ -363,15 +363,44 @@
     window.renderTransferView();
   };
 
+  function transferMessage(plan) {
+    const folderText = plan.folder_name ? '폴더: ' + plan.folder_name + '\n' : '전달 예정 자료 전체\n';
+    return '[MemoryLink 디지털 유산 전달]\n' + plan.recipient + '님께 전달할 디지털 유산이 준비되었습니다.\n' + folderText + (plan.message ? plan.message + '\n' : '') + 'MemoryLink에서 본인 확인 후 안전하게 전달받아 주세요.';
+  }
+
   window.sendTransferSms = function (id) {
     const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
     if (!plan) return;
+    if (String(plan.contact || '').includes('@')) return alert('이 전달 계획에는 이메일이 입력되어 있습니다. 이메일 보내기를 이용해 주세요.');
     const phone = String(plan.contact || '').replace(/[^0-9+]/g, '');
-    if (!phone) return alert('문자를 보낼 휴대폰 번호를 연락처에 입력해 주세요.');
-    const folderText = plan.folder_name ? '폴더: ' + plan.folder_name + '\n' : '';
-    const body = '[MemoryLink 디지털 유산 전달]\n' + plan.recipient + '님께 전달할 디지털 유산이 준비되었습니다.\n' + folderText + (plan.message ? plan.message + '\n' : '') + 'MemoryLink에서 본인 확인 후 안전하게 전달받아 주세요.';
+    if (phone.length < 9) return alert('문자를 보낼 올바른 휴대폰 번호를 연락처에 입력해 주세요.');
+    const body = transferMessage(plan);
     if (!confirm(phone + ' 번호로 문자 작성 화면을 열까요? 실제 전송은 문자 앱에서 최종 확인합니다.')) return;
     location.href = 'sms:' + phone + '?body=' + encodeURIComponent(body);
+  };
+
+  window.sendTransferEmail = function (id) {
+    const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
+    if (!plan) return;
+    const email = String(plan.contact || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('이메일을 보내려면 연락처에 올바른 이메일 주소를 입력해 주세요.');
+    const subject = 'MemoryLink 디지털 유산 전달 - ' + (plan.folder_name || '전달 예정 자료');
+    if (!confirm(email + ' 주소로 이메일 작성 화면을 열까요? 실제 발송은 메일 앱에서 최종 확인합니다.')) return;
+    location.href = 'mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(transferMessage(plan));
+  };
+
+  window.shareTransferFolder = async function (id) {
+    const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
+    if (!plan) return;
+    const file = new File([JSON.stringify(transferPackage(plan), null, 2)], 'MemoryLink-' + (plan.folder_name || 'legacy') + '.json', { type: 'application/json' });
+    if (!navigator.share) return window.downloadTransferPackage(id);
+    try {
+      const data = { title: 'MemoryLink 디지털 유산 전달', text: transferMessage(plan) };
+      if (!navigator.canShare || navigator.canShare({ files: [file] })) data.files = [file];
+      await navigator.share(data);
+    } catch (error) {
+      if (error && error.name !== 'AbortError') alert('휴대폰 공유를 열지 못했습니다. 폴더 패키지를 내려받아 직접 첨부해 주세요.');
+    }
   };
 
   window.downloadTransferPackage = function (id) {
@@ -419,7 +448,7 @@
     existing.innerHTML = plans.map(function (plan) {
       const status = plan.status === 'delivered' ? '전달 완료' : plan.status === 'ready' ? '전달 준비 완료' : '계획 저장';
       const folder = plan.folder_name ? '<span class="feature-plan-folder"><i class="fas fa-folder"></i> ' + escapeHtml(plan.folder_name) + '</span>' : '<span class="feature-plan-folder">전달 예정 자료 전체</span>';
-      return '<div class="legacy-plan feature-plan"><div><strong>' + escapeHtml(plan.recipient) + '</strong><small>' + escapeHtml(plan.contact) + '<br>' + escapeHtml(plan.condition) + ' · ' + status + '</small>' + folder + '</div><div class="feature-plan-actions"><button onclick="downloadTransferPackage(' + Number(plan.id) + ')"><i class="fas fa-box-archive"></i> 폴더 패키지</button><button onclick="sendTransferSms(' + Number(plan.id) + ')"><i class="fas fa-comment-sms"></i> 문자 보내기</button><button onclick="markTransferDelivered(' + Number(plan.id) + ')"><i class="fas fa-check"></i> 전달 완료</button><button class="danger" onclick="deleteTransferPlan(' + Number(plan.id) + ')"><i class="fas fa-trash"></i> 삭제</button></div></div>';
+      return '<div class="legacy-plan feature-plan"><div><strong>' + escapeHtml(plan.recipient) + '</strong><small>' + escapeHtml(plan.contact) + '<br>' + escapeHtml(plan.condition) + ' · ' + status + '</small>' + folder + '</div><div class="feature-plan-actions"><button onclick="shareTransferFolder(' + Number(plan.id) + ')"><i class="fas fa-mobile-screen"></i> 휴대폰 공유</button><button onclick="sendTransferSms(' + Number(plan.id) + ')"><i class="fas fa-comment-sms"></i> 문자</button><button onclick="sendTransferEmail(' + Number(plan.id) + ')"><i class="fas fa-envelope"></i> 이메일</button><button onclick="downloadTransferPackage(' + Number(plan.id) + ')"><i class="fas fa-box-archive"></i> 폴더 저장</button><button onclick="markTransferDelivered(' + Number(plan.id) + ')"><i class="fas fa-check"></i> 전달 완료</button><button class="danger" onclick="deleteTransferPlan(' + Number(plan.id) + ')"><i class="fas fa-trash"></i> 삭제</button></div></div>';
     }).join('');
   };
 
