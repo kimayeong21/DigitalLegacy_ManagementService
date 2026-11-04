@@ -391,9 +391,11 @@
     event.preventDefault();
     const form = event.target;
     if (!form.folder_name || !form.folder_name.value) return alert('전달할 폴더를 직접 선택해 주세요.');
+    const email = form.contact.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('수신인의 올바른 이메일 주소를 입력해 주세요.');
     const plans = readJson(KEYS.transfers, []);
     const sender = getTransferSender();
-    plans.unshift({ id: Date.now(), recipient: form.recipient.value.trim(), contact: form.contact.value.trim(), condition: form.condition.value, message: form.message.value.trim(), folder_name: form.folder_name ? form.folder_name.value : '', sender_id: sender.id, sender_name: sender.name, sender_email: sender.email, status: 'saved', created_at: new Date().toISOString() });
+    plans.unshift({ id: Date.now(), recipient: form.recipient.value.trim(), contact: email, condition: form.condition.value, message: form.message.value.trim(), folder_name: form.folder_name ? form.folder_name.value : '', sender_id: sender.id, sender_name: sender.name, sender_email: sender.email, status: 'saved', created_at: new Date().toISOString() });
     writeJson(KEYS.transfers, plans);
     form.reset();
     window.renderTransferView();
@@ -449,47 +451,26 @@
     window.aiDeliverTransfer(id, null);
   };
 
-  function normalizeKoreanPhone(value) {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    if (raw.startsWith('+')) return '+' + raw.slice(1).replace(/\D/g, '');
-    let digits = raw.replace(/\D/g, '');
-    if (digits.startsWith('0082')) digits = digits.slice(2);
-    if (digits.startsWith('82')) return '+' + digits;
-    if (/^01[016789]/.test(digits)) return '+82' + digits.slice(1);
-    return digits;
-  }
-
-  window.sendTransferSms = function (id) {
-    const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
-    if (!plan) return;
-    if (!plan.folder_name) return alert('전달할 폴더가 선택된 계획을 새로 저장해 주세요.');
-    if (String(plan.contact || '').includes('@')) return alert('이 전달 계획에는 이메일이 입력되어 있습니다. 이메일 보내기를 이용해 주세요.');
-    return window.aiDeliverTransfer(id, null);
-  };
-
   window.sendTransferEmail = function (id) {
     const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
     if (!plan) return;
     if (!plan.folder_name) return alert('전달할 폴더가 선택된 계획을 새로 저장해 주세요.');
     const email = String(plan.contact || '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('이메일을 보내려면 연락처에 올바른 이메일 주소를 입력해 주세요.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('이 전달 계획에는 이메일이 없습니다. 삭제 후 이메일로 다시 등록해 주세요.');
     const subject = 'MemoryLink 디지털 유산 전달 - ' + (plan.folder_name || '전달 예정 자료');
     if (!confirm(email + ' 주소로 이메일 작성 화면을 열까요? 실제 발송은 메일 앱에서 최종 확인합니다.')) return;
     location.href = 'mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(transferMessage(plan));
   };
 
   window.sendTransferNow = function (id) {
-    const plan = readJson(KEYS.transfers, []).find(function (item) { return String(item.id) === String(id); });
-    if (!plan) return;
-    if (String(plan.contact || '').includes('@')) return window.sendTransferEmail(id);
-    return window.sendTransferSms(id);
+    return window.sendTransferEmail(id);
   };
 
   window.aiDeliverTransfer = async function (id, button) {
     const plans = readJson(KEYS.transfers, []);
     const plan = plans.find(function (item) { return String(item.id) === String(id); });
     if (!plan || !plan.folder_name) return alert('전달할 폴더가 선택된 계획을 저장해 주세요.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(plan.contact || '').trim())) return alert('휴대폰 번호 전달 기능이 제거되었습니다. 이 계획을 삭제하고 수신인 이메일로 다시 등록해 주세요.');
     if (String(plan.condition || '').includes('지정일') && !plan.scheduled_date) return window.openTransferDatePicker(id);
     const sender = getTransferSender(plan);
     const scheduleText = plan.scheduled_date ? '\n지정 전달일: ' + plan.scheduled_date : '';
@@ -505,11 +486,9 @@
       });
       let result = await response.json().catch(function () { return {}; });
       const preview = result.preview || localPreview;
-      if (!response.ok && String(plan.contact || '').includes('@') && (result.preview || response.status === 401)) {
+      if (!response.ok && (result.preview || response.status === 401)) {
         await sendAiMessageWithGmail(plan, preview);
         result = { success: true, channel: 'gmail', message: preview };
-      } else if (!response.ok && !String(plan.contact || '').includes('@') && (result.setup_required === 'sms' || response.status === 401)) {
-        throw new Error('다른 앱을 열지 않고 바로 보내려면 MemoryLink 문자 발송 계정 연결이 필요합니다. 현재 화면에서 발송할 수 있도록 Twilio 발신 번호를 설정해 주세요.');
       } else if (!response.ok) {
         throw new Error(result.error || 'AI 전달에 실패했습니다.');
       }
@@ -519,7 +498,7 @@
       plan.ai_message = result.message;
       writeJson(KEYS.transfers, plans);
       window.renderTransferView();
-      alert(result.channel === 'email' || result.channel === 'gmail' ? 'AI가 Gmail로 이메일을 발송했습니다.' : result.pending ? 'AI 메시지를 문자 앱에 준비했습니다. 문자 앱의 보내기 버튼을 눌러 주세요.' : 'AI가 문자를 발송했습니다.');
+      alert('AI가 수신인 이메일로 전달했습니다.');
     } catch (error) {
       alert(error.message || 'AI 전달에 실패했습니다.');
       if (button) { button.disabled = false; button.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> AI로 전달'; }
@@ -605,6 +584,14 @@
     const form = root.querySelector('.legacy-form');
     const summary = root.querySelector('.legacy-summary-card');
     if (summary) summary.remove();
+    if (form && form.elements.contact) {
+      const emailInput = form.elements.contact;
+      emailInput.type = 'email';
+      emailInput.placeholder = 'family@example.com';
+      emailInput.autocomplete = 'email';
+      const contactLabel = emailInput.closest('label');
+      if (contactLabel && contactLabel.firstChild) contactLabel.firstChild.textContent = '수신인 이메일';
+    }
     if (form && !form.elements.folder_name) {
       const messageLabel = form.querySelector('textarea[name="message"]');
       const label = document.createElement('label');
@@ -617,9 +604,11 @@
       const status = plan.status === 'delivered' ? '전달 완료' : plan.status === 'ready' ? '전달 준비 완료' : '계획 저장';
       const folder = '<span class="feature-plan-folder"><i class="fas fa-folder"></i> ' + escapeHtml(transferFolderLabel(plan.folder_name)) + '</span>' + transferFolderContents(plan.folder_name, 5);
       const delivered = plan.status === 'delivered';
+      const hasEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(plan.contact || '').trim());
       const sender = getTransferSender(plan);
       const scheduled = plan.scheduled_date ? '<span class="feature-folder-chip"><i class="fas fa-calendar-day"></i> ' + escapeHtml(plan.scheduled_date) + '</span>' : '';
-      return '<div class="legacy-plan feature-plan"><div><strong>' + escapeHtml(plan.recipient) + '</strong><small>' + escapeHtml(plan.contact) + '<br>발신: ' + escapeHtml(sender.label) + '<br>' + escapeHtml(plan.condition) + ' · ' + status + '</small>' + folder + scheduled + '</div><div class="feature-plan-actions">' + (delivered ? '<span class="feature-delivered"><i class="fas fa-circle-check"></i> AI 전달 완료</span>' : '<button class="feature-send-now" onclick="aiDeliverTransfer(' + Number(plan.id) + ',this)"><i class="fas fa-wand-magic-sparkles"></i> AI로 전달</button>') + '<button class="danger" onclick="deleteTransferPlan(' + Number(plan.id) + ')"><i class="fas fa-trash"></i> 삭제</button></div></div>';
+      const deliveryAction = delivered ? '<span class="feature-delivered"><i class="fas fa-circle-check"></i> AI 전달 완료</span>' : hasEmail ? '<button class="feature-send-now" onclick="aiDeliverTransfer(' + Number(plan.id) + ',this)"><i class="fas fa-wand-magic-sparkles"></i> AI로 전달</button>' : '<span class="feature-email-required"><i class="fas fa-envelope-circle-xmark"></i> 이메일 재등록 필요</span>';
+      return '<div class="legacy-plan feature-plan"><div><strong>' + escapeHtml(plan.recipient) + '</strong><small>' + (hasEmail ? escapeHtml(plan.contact) : '기존 휴대폰 번호 계획 · 이메일로 다시 등록해 주세요.') + '<br>발신: ' + escapeHtml(sender.label) + '<br>' + escapeHtml(plan.condition) + ' · ' + status + '</small>' + folder + scheduled + '</div><div class="feature-plan-actions">' + deliveryAction + '<button class="danger" onclick="deleteTransferPlan(' + Number(plan.id) + ')"><i class="fas fa-trash"></i> 삭제</button></div></div>';
     }).join('');
   };
 
@@ -774,7 +763,7 @@
     style.id = 'feature-complete-styles';
     style.textContent = '.feature-modal{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:24px;background:rgba(12,22,45,.55);backdrop-filter:blur(8px)}.feature-modal.hidden{display:none}.feature-modal-card{width:min(880px,100%);max-height:88vh;overflow:auto;border-radius:20px;background:#fff;padding:24px;box-shadow:0 28px 80px rgba(13,31,70,.25)}.feature-modal-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid #e5eaf3}.feature-modal-head span{color:#315efb;font-size:10px;font-weight:850;letter-spacing:.16em}.feature-modal-head h3{margin-top:5px;color:#16213d;font-size:22px;font-weight:850}.feature-modal-head>button{width:38px;height:38px;border-radius:10px;background:#f2f5fa}.feature-manager-actions{display:flex;gap:8px;margin:18px 0}.feature-manager-actions button{min-height:40px;padding:0 14px;border:1px solid #dfe6f0;border-radius:10px;font-size:12px;font-weight:800}.feature-folder-row,.feature-drive-row,.feature-move-row{display:grid;grid-template-columns:38px minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:12px 0;border-top:1px solid #edf1f6}.feature-folder-row>i,.feature-drive-row>i{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;background:#edf2ff;color:#315efb}.feature-folder-row strong,.feature-folder-row small,.feature-drive-row strong,.feature-drive-row small,.feature-move-row strong,.feature-move-row small{display:block}.feature-folder-row small,.feature-drive-row small,.feature-move-row small{margin-top:3px;color:#768197;font-size:11px}.feature-folder-row button,.feature-drive-row button,.feature-move-row select{min-height:34px;padding:0 10px;border:1px solid #dfe6f0;border-radius:8px;background:#fff;font-size:11px;font-weight:750}.danger{color:#c34455!important}.feature-subtitle{margin-top:24px;padding-top:18px;border-top:1px solid #e5eaf3;color:#16213d;font-size:15px}.feature-move-row{grid-template-columns:minmax(0,1fr) minmax(170px,260px)}.feature-result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.feature-result-grid>*{padding:18px;border:1px solid #e1e7f0;border-radius:14px;background:#f8faff;text-align:left}.feature-result-grid strong,.feature-result-grid span,.feature-result-grid small{display:block}.feature-result-grid strong{color:#315efb;font-size:26px}.feature-result-grid span{margin-top:5px;font-size:13px;font-weight:800}.feature-result-grid small{margin-top:4px;color:#768197;font-size:10px}.feature-cleanup-list{margin-top:16px}.feature-cleanup-list article{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:12px 0;border-top:1px solid #edf1f6}.feature-cleanup-list strong,.feature-cleanup-list small{display:block}.feature-cleanup-list small{margin-top:3px;color:#768197;font-size:11px}.feature-cleanup-list button,.feature-plan button{min-height:32px;padding:0 9px;border:1px solid #dfe6f0;border-radius:8px;background:#fff;font-size:10px;font-weight:750}.feature-ai-results{margin-bottom:16px}.feature-duplicate-group{margin-top:15px;padding:14px;border:1px solid #e1e7f0;border-radius:14px}.feature-duplicate-group h4{color:#315efb}.feature-duplicate-group>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #edf1f6}.feature-duplicate-group strong,.feature-duplicate-group small{display:block}.feature-duplicate-group small{color:#768197}.feature-duplicate-group em{color:#315efb;font-size:11px;font-style:normal;font-weight:800}.feature-empty{padding:32px;text-align:center;color:#768197}.feature-plan{display:flex!important;align-items:center;justify-content:space-between}.feature-plan>div:last-child{display:flex;gap:6px}@media(max-width:1150px) and (min-width:769px){#main-app>header #user-name{display:none!important}#main-app>header>div>div:last-child{flex:0 0 auto!important;min-width:44px!important}#main-app>header>div>div:last-child>button{width:44px!important;min-width:44px!important;padding:0!important;font-size:0!important}#main-app>header>div>div:last-child>button i{font-size:15px!important;margin:0!important}}@media(max-width:700px){.feature-result-grid{grid-template-columns:1fr}.feature-folder-row,.feature-drive-row{grid-template-columns:36px 1fr}.feature-folder-row button,.feature-drive-row button{grid-column:2}.feature-move-row{grid-template-columns:1fr}.feature-cleanup-list article{grid-template-columns:1fr 1fr}.feature-cleanup-list article>div{grid-column:1/-1}.feature-modal-card{padding:18px}.feature-plan{align-items:flex-start;flex-direction:column}}';
     style.textContent += '.feature-drive-setup{padding:18px 0}.feature-drive-setup label{display:block;margin:18px 0 7px;color:#16213d;font-size:12px;font-weight:850}.feature-drive-setup input{width:100%;min-height:48px;padding:0 14px;border:1px solid #d8e0ec;border-radius:11px;background:#fff;color:#16213d;font-size:13px}.feature-drive-setup p{margin-top:10px;color:#657087;font-size:11px;line-height:1.7}.feature-drive-status{padding:14px;border-radius:12px}.feature-drive-status strong,.feature-drive-status small{display:block}.feature-drive-status small{margin-top:4px}.feature-drive-status.ok{background:#eef8f3;color:#16734b}.feature-drive-status.error{background:#fff1f2;color:#b4233c}.feature-drive-message{margin-top:12px;padding:12px;border-radius:10px;background:#fff7e8;color:#8b5a00;font-size:12px}.feature-drive-setup .feature-manager-actions{align-items:center;flex-wrap:wrap}.feature-drive-setup .feature-manager-actions a{padding:11px 14px;border-radius:10px;color:#315efb;font-size:12px;font-weight:800;text-decoration:none}';
-    style.textContent += '.legacy-form label>small{color:#8791a5;font-size:10px;font-weight:600}.feature-plan-folder{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:7px;background:#edf2ff;color:#315efb;font-size:10px;font-weight:800}.feature-plan-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}.feature-plan-actions button{white-space:nowrap}.feature-plan-actions button i{margin-right:4px}.feature-plan-actions .feature-send-now{border-color:#315efb;background:#315efb;color:#fff}.feature-delivered{display:inline-flex;align-items:center;gap:5px;padding:8px 10px;border-radius:8px;background:#eaf8f1;color:#16734b;font-size:10px;font-weight:850}@media(max-width:700px){.feature-plan-actions{width:100%;justify-content:flex-start}.feature-plan-actions button{flex:1 1 calc(50% - 6px)}.feature-plan-actions .feature-send-now{flex-basis:100%}}';
+    style.textContent += '.legacy-form label>small{color:#8791a5;font-size:10px;font-weight:600}.feature-plan-folder{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:7px;background:#edf2ff;color:#315efb;font-size:10px;font-weight:800}.feature-plan-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}.feature-plan-actions button{white-space:nowrap}.feature-plan-actions button i{margin-right:4px}.feature-plan-actions .feature-send-now{border-color:#315efb;background:#315efb;color:#fff}.feature-delivered,.feature-email-required{display:inline-flex;align-items:center;gap:5px;padding:8px 10px;border-radius:8px;font-size:10px;font-weight:850}.feature-delivered{background:#eaf8f1;color:#16734b}.feature-email-required{background:#fff3e8;color:#a64b19}@media(max-width:700px){.feature-plan-actions{width:100%;justify-content:flex-start}.feature-plan-actions button{flex:1 1 calc(50% - 6px)}.feature-plan-actions .feature-send-now{flex-basis:100%}}';
     style.textContent += '.feature-folder-picker{width:100%;display:grid;grid-template-columns:38px minmax(0,1fr) 20px;align-items:center;gap:10px;padding:12px!important;border:1px solid #d8e0ec!important;border-radius:10px!important;background:#fff!important;text-align:left}.feature-folder-picker>i:first-child{width:38px;height:38px;display:grid;place-items:center;border-radius:9px;background:#edf2ff;color:#315efb}.feature-folder-picker span,.feature-folder-picker strong,.feature-folder-picker small{display:block}.feature-folder-picker strong{color:#16213d;font-size:12px}.feature-folder-picker small{margin-top:3px;color:#7a8599;font-size:10px}.feature-folder-picker>i:last-child{color:#9aa4b6}.feature-folder-picker.selected{border-color:#315efb!important;background:#f8faff!important}.feature-transfer-folder-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding-top:18px}.feature-transfer-folder-grid button{display:grid;grid-template-columns:42px 1fr;gap:3px 10px;align-items:center;padding:16px;border:1px solid #dfe6f0;border-radius:14px;background:#fff;text-align:left}.feature-transfer-folder-grid button:hover{border-color:#315efb;background:#f6f8ff}.feature-transfer-folder-grid i{grid-row:1/3;width:42px;height:42px;display:grid;place-items:center;border-radius:10px;background:#edf2ff;color:#315efb}.feature-transfer-folder-grid strong{font-size:13px}.feature-transfer-folder-grid small{color:#7a8599;font-size:10px}.feature-date-picker{display:grid;gap:18px;padding-top:12px}.feature-date-picker p{margin:0;color:#4b5567}.feature-date-picker label{display:grid;gap:8px;font-size:12px;font-weight:700}.feature-date-picker input{width:100%;padding:14px;border:1px solid #d8e0ec;border-radius:10px;font:inherit}.feature-date-picker .legacy-primary{min-height:46px}@media(max-width:700px){.feature-transfer-folder-grid{grid-template-columns:1fr}}';
     style.textContent += '.feature-transfer-folder-grid button{display:block;min-width:0}.feature-folder-title{display:grid;grid-template-columns:42px 1fr;gap:3px 10px;align-items:center}.feature-folder-title>i{grid-row:1/3!important;width:42px!important;height:42px!important;display:grid!important;place-items:center!important;border-radius:10px!important;background:#edf2ff!important;color:#315efb!important}.feature-folder-title>strong,.feature-folder-title>small{grid-column:2}.feature-folder-contents{display:grid;gap:6px;margin-top:13px;padding-top:11px;border-top:1px solid #edf1f6}.feature-folder-contents span{display:flex;align-items:center;gap:7px;min-width:0;color:#4f5b70;font-size:10px}.feature-folder-contents span i{width:22px!important;height:22px!important;display:grid!important;place-items:center!important;flex:0 0 22px;border-radius:6px!important;background:#f3f5f9!important;color:#6b7890!important}.feature-folder-contents span b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}.feature-folder-contents em,.feature-folder-empty{color:#8a94a7;font-size:10px;font-style:normal}.feature-plan .feature-folder-contents{max-width:420px;margin-top:7px}.feature-plan .feature-folder-contents span{font-size:9px}@media(max-width:700px){.feature-plan .feature-folder-contents{max-width:100%}}';
     document.head.appendChild(style);

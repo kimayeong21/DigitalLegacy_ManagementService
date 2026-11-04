@@ -9,9 +9,6 @@ type Bindings = {
   OPENAI_MODEL?: string;
   RESEND_API_KEY?: string;
   MEMORYLINK_FROM_EMAIL?: string;
-  TWILIO_ACCOUNT_SID?: string;
-  TWILIO_AUTH_TOKEN?: string;
-  TWILIO_FROM_NUMBER?: string;
 }
 
 type MySQLDatabase = D1Database;
@@ -1265,7 +1262,10 @@ app.post('/api/transfers/send', authMiddleware, async (c) => {
   const items = Array.isArray(body.items) ? body.items.slice(0, 50) : []
 
   if (!recipient || !contact || !folderName) {
-    return c.json({ error: '수신인, 연락처, 전달 폴더가 필요합니다.' }, 400)
+    return c.json({ error: '수신인, 이메일, 전달 폴더가 필요합니다.' }, 400)
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+    return c.json({ error: '휴대폰 번호 전달 기능이 제거되었습니다. 올바른 수신인 이메일을 입력해 주세요.' }, 400)
   }
 
   const itemSummary = items.length
@@ -1321,40 +1321,7 @@ app.post('/api/transfers/send', authMiddleware, async (c) => {
     return c.json({ success: true, channel: 'email', message: aiMessage })
   }
 
-  const compactPhone = contact.replace(/[^0-9+]/g, '')
-  let phone = compactPhone
-  if (compactPhone.startsWith('0082')) phone = `+${compactPhone.slice(2)}`
-  else if (compactPhone.startsWith('82')) phone = `+${compactPhone}`
-  else if (/^01[016789]/.test(compactPhone)) phone = `+82${compactPhone.slice(1)}`
-  if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
-    return c.json({ error: '국가번호를 포함한 올바른 휴대폰 번호 또는 이메일을 입력해 주세요.' }, 400)
-  }
-  if (!c.env.TWILIO_ACCOUNT_SID || !c.env.TWILIO_AUTH_TOKEN || !c.env.TWILIO_FROM_NUMBER) {
-    return c.json({ error: '문자 자동 발송 설정이 필요합니다. Twilio 계정 정보와 발신 번호를 설정해 주세요.', setup_required: 'sms', preview: aiMessage }, 503)
-  }
-  const form = new URLSearchParams({ To: phone, From: c.env.TWILIO_FROM_NUMBER, Body: aiMessage.slice(0, 1500) })
-  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${c.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': `Basic ${btoa(`${c.env.TWILIO_ACCOUNT_SID}:${c.env.TWILIO_AUTH_TOKEN}`)}` },
-    body: form.toString()
-  })
-  if (!response.ok) {
-    const providerError: any = await response.json().catch(() => ({}))
-    const providerCode = Number(providerError.code || 0)
-    const errorByCode: Record<number, string> = {
-      20003: 'Twilio 계정 인증에 실패했습니다. Account SID와 Auth Token을 다시 확인해 주세요.',
-      21211: '수신 휴대폰 번호 형식이 올바르지 않습니다. 010 번호 또는 +82 국가번호 형식으로 입력해 주세요.',
-      21408: 'Twilio에서 한국 문자 발송 권한이 허용되지 않았습니다. Messaging Geographic Permissions에서 South Korea를 허용해 주세요.',
-      21606: '현재 Twilio 발신 번호를 API 문자 발송에 사용할 수 없습니다. SMS 기능이 있는 활성 발신 번호가 필요합니다.',
-      21608: 'Twilio 체험판에서는 인증된 수신 번호로만 문자를 보낼 수 있습니다. Twilio에서 이 휴대폰 번호를 먼저 인증해 주세요.',
-      14111: 'Twilio 체험판에서 인증되지 않은 수신 번호입니다. Twilio의 Verified recipients에 번호를 등록해 주세요.'
-    }
-    const userError = errorByCode[providerCode]
-      || `Twilio 문자 발송이 거절되었습니다${providerCode ? ` (오류 ${providerCode})` : ''}. 체험판의 수신 번호 인증과 국가 제한을 확인해 주세요.`
-    console.error('Twilio send failed', { status: response.status, code: providerCode, message: String(providerError.message || '').slice(0, 200) })
-    return c.json({ error: userError, provider_code: providerCode || undefined, preview: aiMessage }, 502)
-  }
-  return c.json({ success: true, channel: 'sms', message: aiMessage })
+  return c.json({ error: '이메일 발송 서비스가 요청을 처리하지 못했습니다.', preview: aiMessage }, 502)
 })
 
 // ==================== Frontend ====================
@@ -4640,7 +4607,7 @@ app.get('/', (c) => {
 
             function getTransferPlans(){try{return JSON.parse(localStorage.getItem(LOCAL_TRANSFER_PLANS_KEY)||'[]')}catch{return[]}}
             function saveTransferPlan(event){event.preventDefault();const form=event.target;const plans=getTransferPlans();plans.unshift({id:Date.now(),recipient:form.recipient.value,contact:form.contact.value,condition:form.condition.value,message:form.message.value});localStorage.setItem(LOCAL_TRANSFER_PLANS_KEY,JSON.stringify(plans));form.reset();renderTransferView();alert('전달 계획을 저장했습니다.');}
-            function renderTransferView(){const root=document.getElementById('legacy-transfer-content');if(!root)return;const plans=getTransferPlans();const count=getLegacyData().filter(function(item){return legacyStatusOf(item)==='transfer';}).length;root.innerHTML='<div class="legacy-transfer-grid"><section class="legacy-panel"><div class="legacy-section-head"><div><span>NEW TRANSFER PLAN</span><h3>수신인과 전달 조건 설정</h3></div></div><form class="legacy-form" onsubmit="saveTransferPlan(event)"><label>받는 사람<input name="recipient" required placeholder="예: 김가족"></label><label>연락처 또는 이메일<input name="contact" required placeholder="family@example.com"></label><label>전달 조건<select name="condition"><option>사용자 승인 후 즉시</option><option>지정일에 전달</option><option>장기 미접속 확인 후</option></select></label><label>남길 메시지<textarea name="message" placeholder="유품과 함께 전달할 설명을 남겨주세요."></textarea></label><button class="legacy-primary" type="submit">전달 계획 저장</button></form></section><aside class="legacy-panel"><div class="legacy-summary-card"><p>전달 예정 유품</p><strong>'+count+'개</strong><small>보관함에서 전달 대상으로 지정한 자료입니다. 실제 전달 전에는 본인 확인과 최종 승인이 필요합니다.</small></div><div class="legacy-plan-list" style="margin-top:14px">'+(plans.length?plans.map(function(plan){return '<div class="legacy-plan"><strong>'+escapeHtml(plan.recipient)+'</strong><small>'+escapeHtml(plan.contact)+'<br>'+escapeHtml(plan.condition)+'</small></div>';}).join(''):'<div class="legacy-empty" style="padding:30px 15px"><p>저장된 전달 계획이 없습니다.</p></div>')+'</div></aside></div>';}
+            function renderTransferView(){const root=document.getElementById('legacy-transfer-content');if(!root)return;const plans=getTransferPlans();const count=getLegacyData().filter(function(item){return legacyStatusOf(item)==='transfer';}).length;root.innerHTML='<div class="legacy-transfer-grid"><section class="legacy-panel"><div class="legacy-section-head"><div><span>NEW TRANSFER PLAN</span><h3>수신인과 전달 조건 설정</h3></div></div><form class="legacy-form" onsubmit="saveTransferPlan(event)"><label>받는 사람<input name="recipient" required placeholder="예: 김가족"></label><label>수신인 이메일<input name="contact" type="email" autocomplete="email" required placeholder="family@example.com"></label><label>전달 조건<select name="condition"><option>사용자 승인 후 즉시</option><option>지정일에 전달</option><option>장기 미접속 확인 후</option></select></label><label>남길 메시지<textarea name="message" placeholder="유품과 함께 전달할 설명을 남겨주세요."></textarea></label><button class="legacy-primary" type="submit">전달 계획 저장</button></form></section><aside class="legacy-panel"><div class="legacy-summary-card"><p>전달 예정 유품</p><strong>'+count+'개</strong><small>보관함에서 전달 대상으로 지정한 자료입니다. 실제 전달 전에는 본인 확인과 최종 승인이 필요합니다.</small></div><div class="legacy-plan-list" style="margin-top:14px">'+(plans.length?plans.map(function(plan){return '<div class="legacy-plan"><strong>'+escapeHtml(plan.recipient)+'</strong><small>'+escapeHtml(plan.contact)+'<br>'+escapeHtml(plan.condition)+'</small></div>';}).join(''):'<div class="legacy-empty" style="padding:30px 15px"><p>저장된 전달 계획이 없습니다.</p></div>')+'</div></aside></div>';}
 
             function restoreLegacyItem(id){updateLegacyMemory(id,{legacy_status:'review',deleted_at:null});renderTrashView();}
             function emptyLegacyTrash(){if(!confirm('휴지통의 자료를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.'))return;saveLocalMemories(getLocalMemories().filter(function(item){return legacyStatusOf(item)!=='trash';}));renderTrashView();renderLegacyWorkspace();}
